@@ -112,23 +112,40 @@ function canvasTex(w: number, h: number, draw: (g: CanvasRenderingContext2D) => 
 const _tex = new Map<string, THREE.CanvasTexture>();
 
 export function labelTexture(text: string): THREE.CanvasTexture {
-  const key = `label|${text}`;
+  // Extract primary name (e.g. "Court 1" from "Court 1 - Center Court") for the painted 3D apron
+  const cleanText = (
+    text.includes(' - ')
+      ? text.split(' - ')[0]
+      : text.includes(' — ')
+      ? text.split(' — ')[0]
+      : text
+  ).trim();
+
+  const key = `label|${cleanText}`;
   const hit = _tex.get(key);
   if (hit) return hit;
+
   const draw = (g: CanvasRenderingContext2D) => {
     g.clearRect(0, 0, 512, 128);
-    g.font = '700 84px Fredoka, "Arial Rounded MT Bold", "Arial Black", sans-serif';
+
+    // Choose font size based on text length to guarantee no clipping
+    const len = cleanText.length;
+    const fontSize = len <= 8 ? 84 : len <= 12 ? 68 : len <= 16 ? 54 : 44;
+
+    g.font = `700 ${fontSize}px Fredoka, "Arial Rounded MT Bold", "Arial Black", sans-serif`;
     g.textAlign = 'center';
     g.textBaseline = 'middle';
     g.lineJoin = 'round';
-    g.lineWidth = 12;
+    g.lineWidth = Math.max(6, Math.round(fontSize * 0.14));
     g.strokeStyle = 'rgba(15,42,29,0.55)';
-    g.strokeText(text.toUpperCase(), 256, 68);
+    g.strokeText(cleanText.toUpperCase(), 256, 68);
     g.fillStyle = '#ffffff';
-    g.fillText(text.toUpperCase(), 256, 68);
+    g.fillText(cleanText.toUpperCase(), 256, 68);
   };
+
   const tex = canvasTex(512, 128, draw);
   _tex.set(key, tex);
+
   // Redraw once the display font arrives so the label doesn't stay in fallback font
   if (typeof document !== 'undefined' && document.fonts?.load) {
     document.fonts.load('700 84px Fredoka').then(() => {

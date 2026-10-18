@@ -667,43 +667,269 @@
   gap: var(--space-3);
 }
 
-/* ── Mobile Responsive Pass ── */
-@media (max-width: 768px) {
+/* Back button text switcher */
+.backBtnDesktop {
+  display: inline;
+}
+
+.backBtnMobile {
+  display: none;
+}
+
+/* Floating Mobile Booking Bar */
+.mobileFloatingBar {
+  display: none;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* ── Comprehensive Mobile Responsive Pass (All Resolutions) ── */
+@media (max-width: 900px) {
+  .container {
+    padding-bottom: calc(var(--space-12) + 90px);
+  }
+
+  .summarySidebar {
+    position: static;
+    top: auto;
+  }
+
+  .mobileFloatingBar {
+    display: flex;
+    position: fixed;
+    bottom: var(--bottom-nav-h, 68px);
+    left: 0;
+    right: 0;
+    background: rgba(255, 255, 255, 0.96);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-top: 2px solid var(--color-border);
+    padding: 10px 16px;
+    z-index: 45;
+    box-shadow: 0 -4px 16px rgba(15, 42, 29, 0.1);
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    animation: slideUp 240ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .mobileBarDetails {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .mobileBarCourt {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: var(--color-brand-700);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mobileBarSlot {
+    font-size: 0.75rem;
+    color: var(--color-text-secondary);
+  }
+
+  .mobileBarPrice {
+    color: var(--color-brand-700);
+    font-weight: 700;
+  }
+}
+
+@media (max-width: 640px) {
   .headerInner {
     padding: var(--space-3) var(--space-4);
+    gap: var(--space-2);
+  }
+
+  .backBtnDesktop {
+    display: none;
+  }
+
+  .backBtnMobile {
+    display: inline;
   }
 
   .main {
     margin: var(--space-4) auto;
-    padding: 0 var(--space-4);
+    padding: 0 var(--space-3);
   }
 
-  .stepsIndicator {
-    gap: var(--space-1);
-    overflow-x: auto;
+  .titleSection {
+    margin-bottom: var(--space-4);
+  }
+
+  .pageTitle {
+    font-size: 1.45rem;
+    letter-spacing: -0.01em;
+  }
+
+  .pageSubtitle {
+    font-size: 0.85rem;
+  }
+
+  .card {
+    padding: var(--space-4);
+    border-radius: var(--radius-xl);
+  }
+
+  .cardHeader {
+    gap: var(--space-2);
+    margin-bottom: var(--space-4);
     padding-bottom: var(--space-2);
   }
 
-  .stepItem {
+  .cardTitle {
+    font-size: var(--text-base);
+  }
+
+  .stepNumber {
+    width: 28px;
+    height: 28px;
     font-size: var(--text-xs);
-    padding: var(--space-1) var(--space-2);
   }
 
-  .cardGrid {
+  .dateRow {
+    gap: var(--space-2);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    scroll-snap-type: x mandatory;
+    padding-bottom: 6px;
+    margin-bottom: var(--space-3);
+  }
+
+  .dateRow::-webkit-scrollbar {
+    display: none;
+  }
+
+  .datePill {
+    scroll-snap-align: start;
+    flex-shrink: 0;
+    white-space: nowrap;
+    padding: 6px 12px;
+    font-size: var(--text-xs);
+  }
+
+  .courtsGrid {
     grid-template-columns: 1fr;
+    gap: 8px;
   }
 
-  .formRow {
+  .courtCard {
+    padding: 10px 12px;
+  }
+
+  .courtName {
+    font-size: 0.92rem;
+  }
+
+  .slotsGrid {
+    grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
+    gap: 6px;
+    max-height: 240px;
+  }
+
+  .slotBtn {
+    padding: 8px 4px;
+    font-size: 0.78rem;
+  }
+
+  .addonItem {
+    padding: 10px 12px;
+  }
+
+  .counterBtn {
+    width: 32px;
+    height: 32px;
+  }
+
+  .splitButtons {
+    gap: 6px;
+  }
+
+  .splitBtn {
+    padding: 6px 4px;
+    font-size: 0.72rem;
+  }
+
+  .summaryCard {
+    padding: var(--space-4);
+    border-radius: var(--radius-xl);
+  }
+
+  .successContainer {
+    margin: var(--space-4) auto;
+    padding: var(--space-6) var(--space-4);
+  }
+
+  .successIcon {
+    font-size: 2.5rem;
+  }
+
+  .successTitle {
+    font-size: var(--text-xl);
+  }
+}
+
+@media (max-width: 480px) {
+  .badge {
+    display: none;
+  }
+
+  .durationRow {
+    gap: 6px;
+  }
+
+  .durationBtn {
+    padding: 8px 4px;
+  }
+
+  .durationTitle {
+    font-size: 0.82rem;
+  }
+
+  .durationSub {
+    font-size: 0.65rem;
+  }
+}
+
+@media (max-width: 360px) {
+  .main {
+    padding: 0 8px;
+  }
+
+  .pageTitle {
+    font-size: 1.25rem;
+  }
+
+  .durationRow {
     grid-template-columns: 1fr;
+    gap: 6px;
   }
 
-  .wizardFooter {
-    flex-direction: column-reverse;
-    gap: var(--space-3);
+  .durationBtn {
+    flex-direction: row;
+    justify-content: space-between;
+    padding: 8px 12px;
   }
 
-  .wizardFooter button {
-    width: 100%;
+  .slotsGrid {
+    grid-template-columns: repeat(3, 1fr);
   }
 }
 

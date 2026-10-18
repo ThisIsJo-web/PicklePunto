@@ -392,3 +392,64 @@
   box-shadow: 0 2px 0 var(--color-lime-500);
   font-weight: 700;
 }
+
+/* ── Mobile Responsive Schedule Pass ── */
+@media (max-width: 768px) {
+  .controlsBar {
+    padding: var(--space-3);
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-3);
+  }
+
+  .dateNav {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .dateDisplay {
+    min-width: auto;
+    font-size: var(--text-base);
+  }
+
+  .rightControls {
+    justify-content: space-between;
+    width: 100%;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .legend {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+    gap: var(--space-2);
+  }
+
+  .legendItem {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  .timelineWrapper {
+    border-radius: var(--radius-xl);
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (max-width: 480px) {
+  .navArrowBtn {
+    padding: 6px 10px;
+    font-size: var(--text-xs);
+  }
+
+  .dateDisplay {
+    font-size: var(--text-sm);
+  }
+
+  .realtimeBadge {
+    font-size: 10px;
+    padding: 3px 8px;
+  }
+}

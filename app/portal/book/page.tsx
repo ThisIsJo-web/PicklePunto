@@ -28,7 +28,8 @@ interface Product {
   name: string;
   category: string;
   price: string;
-  stockQuantity: number;
+  stockQty?: number;
+  stockQuantity?: number;
 }
 
 interface Slot {
@@ -75,13 +76,19 @@ export default function PlayerBookingWizardPage() {
   const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null);
 
   const bookingStageCourts: StageCourt[] = useMemo(() => {
-    return courts.map((c) => ({
-      id: c.id,
-      name: c.name,
-      state: 'AVAILABLE',
-      caption: `${c.surfaceType} · ₱${parseFloat(c.hourlyRate).toFixed(0)}/hr`,
-    }));
-  }, [courts]);
+    return courts.map((c) => {
+      const avail = availability.find((a) => a.courtId === c.id);
+      const hasSlots = avail ? avail.availableSlots.length > 0 : true;
+      const isSelected = c.id === selectedCourtId;
+
+      return {
+        id: c.id,
+        name: c.name,
+        state: isSelected ? 'USING' : hasSlots ? 'AVAILABLE' : 'BOOKED',
+        caption: `${c.surfaceType} · ₱${parseFloat(c.hourlyRate).toFixed(0)}/hr`,
+      };
+    });
+  }, [courts, availability, selectedCourtId]);
 
   // Add-ons & Split
   const [products, setProducts] = useState<Product[]>([]);
@@ -385,11 +392,12 @@ export default function PlayerBookingWizardPage() {
             </Link>
             <span className={styles.badge}>Player Self-Service</span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
             <SoundToggle />
             <Link href="/portal">
               <Button variant="ghost" size="sm">
-                ← Back to Dashboard
+                <span className={styles.backBtnDesktop}>← Back to Dashboard</span>
+                <span className={styles.backBtnMobile}>← Back</span>
               </Button>
             </Link>
           </div>
@@ -588,7 +596,7 @@ export default function PlayerBookingWizardPage() {
                       <div className={styles.addonInfo}>
                         <span className={styles.addonName}>{prod.name}</span>
                         <span className={styles.addonPrice}>
-                          ₱{parseFloat(prod.price).toFixed(2)} each · {prod.stockQuantity} available
+                          ₱{parseFloat(prod.price).toFixed(2)} each · {prod.stockQty ?? prod.stockQuantity ?? 0} in stock
                         </span>
                       </div>
                       <div className={styles.addonControls}>
@@ -604,7 +612,7 @@ export default function PlayerBookingWizardPage() {
                         <button
                           type="button"
                           className={styles.counterBtn}
-                          disabled={qty >= prod.stockQuantity}
+                          disabled={qty >= (prod.stockQty ?? prod.stockQuantity ?? 0)}
                           onClick={() => updateAddonQty(prod.id, 1)}
                         >
                           +
@@ -772,6 +780,29 @@ export default function PlayerBookingWizardPage() {
             </div>
           </div>
         </form>
+
+        {/* Floating Mobile Booking Summary & Instant CTA */}
+        {selectedSlot && (
+          <aside className={styles.mobileFloatingBar} aria-label="Mobile booking action bar">
+            <div className={styles.mobileBarDetails}>
+              <div className={styles.mobileBarCourt}>{activeCourt?.name?.split(/[-—:]/)[0]?.trim() || 'Court'}</div>
+              <div className={styles.mobileBarSlot}>
+                {formatTime(selectedSlot.startTime)} ({selectedDuration}m) · <span className={styles.mobileBarPrice}>₱{totalAmount.toFixed(2)}</span>
+              </div>
+            </div>
+            <Button
+              type="button"
+              onClick={() => handleSubmitBooking()}
+              variant="primary"
+              size="md"
+              loading={submitting}
+              disabled={submitting}
+              data-sfx="whoosh"
+            >
+              Reserve Slot
+            </Button>
+          </aside>
+        )}
       </main>
       <PlayerBottomNav />
     </div>

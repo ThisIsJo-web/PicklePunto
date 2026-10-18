@@ -19,43 +19,65 @@ interface CameraProps {
   targetPos: [number, number, number];
   viewMode: 'focus' | 'arena';
   animate: boolean;
+  orbitActive?: boolean;
 }
 
-function CameraRig({ targetPos, viewMode }: CameraProps) {
-  const { camera, gl } = useThree();
+function CameraRig({ targetPos, viewMode, orbitActive }: CameraProps) {
+  const { camera, gl, size } = useThree();
   const controlsRef = useRef<OrbitControls | null>(null);
   const lookTarget = useRef(new THREE.Vector3(...targetPos));
   const desiredCam = useRef(new THREE.Vector3());
 
-  // Set up OrbitControls on canvas DOM element
+  // Set up OrbitControls on canvas DOM element with mobile-friendly gestures
   useEffect(() => {
     const controls = new OrbitControls(camera, gl.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     controls.maxPolarAngle = Math.PI / 2.15; // Don't go below floor
-    controls.minDistance = 4;
-    controls.maxDistance = 34;
+    controls.minDistance = 3.5;
+    controls.maxDistance = 36;
     controls.target.copy(lookTarget.current);
+
+    // Responsive touch controls:
+    // If orbitActive is enabled or on desktop, 1 finger/mouse rotates.
+    // Otherwise on touch devices, rotate is disabled by default so 1-finger swipes scroll the page naturally!
+    const isTouch = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+    controls.enableRotate = !isTouch || Boolean(orbitActive);
+    controls.enableZoom = true;
+    controls.enablePan = !isTouch || Boolean(orbitActive);
+
     controlsRef.current = controls;
 
     return () => {
       controls.dispose();
     };
-  }, [camera, gl]);
+  }, [camera, gl, orbitActive]);
 
-  // Compute desired camera offset depending on viewMode
+  // Compute desired camera offset depending on viewMode & screen aspect ratio
   useEffect(() => {
     const [tx, ty, tz] = targetPos;
     lookTarget.current.set(tx, ty, tz);
 
+    // Auto-scale camera distance on narrow mobile viewports so court is never cropped
+    const aspect = size.width / Math.max(1, size.height);
+    const zoomFactor = aspect < 1.1 ? 1.35 : aspect < 1.45 ? 1.18 : 1.0;
+
     if (viewMode === 'focus') {
-      // Intimate isometric court angle
-      desiredCam.current.set(tx + 4.8, ty + 4.8, tz + 6.2);
+      // Intimate isometric court angle scaled for viewport
+      desiredCam.current.set(
+        tx + 4.8 * zoomFactor,
+        ty + 4.8 * zoomFactor,
+        tz + 6.2 * zoomFactor
+      );
     } else {
-      // High-angle arena overview
-      desiredCam.current.set(tx + 9.5, ty + 12.0, tz + 14.0);
+      // High-angle arena overview scaled for viewport
+      desiredCam.current.set(
+        tx + 9.5 * zoomFactor,
+        ty + 12.0 * zoomFactor,
+        tz + 14.0 * zoomFactor
+      );
     }
-  }, [targetPos, viewMode]);
+  }, [targetPos, viewMode, size]);
 
   useFrame((_, dt) => {
     const k = 1 - Math.exp(-6 * dt);
@@ -106,6 +128,7 @@ export default function CourtStage({
   const [mounted, setMounted] = useState(false);
   const [animate, setAnimate] = useState(true);
   const [viewMode, setViewMode] = useState<'focus' | 'arena'>(initialMode);
+  const [touchOrbit, setTouchOrbit] = useState(false);
   const [activeId, setActiveId] = useState<string>(() => {
     return selectedCourtId || (courts.length > 0 ? courts[0].id : 'c1');
   });
@@ -264,6 +287,7 @@ export default function CourtStage({
               targetPos={currentTargetPos}
               viewMode={viewMode}
               animate={animate}
+              orbitActive={touchOrbit}
             />
 
             {/* Render all courts in facility */}
@@ -289,8 +313,18 @@ export default function CourtStage({
         )}
 
         <div className={styles.dragHint}>
-          <span>👆</span>
-          <span>Drag to orbit · Pinch to zoom · Tap court to inspect</span>
+          <button
+            type="button"
+            className={`${styles.orbitHintBtn} ${touchOrbit ? styles.orbitHintBtnActive : ''}`}
+            onClick={() => {
+              play('tap');
+              setTouchOrbit((prev) => !prev);
+            }}
+            title="Toggle touch orbit mode"
+          >
+            <span>{touchOrbit ? '🔄 Orbit: 1-Finger' : '👆 2-Finger Orbit / Scroll'}</span>
+          </button>
+          <span className={styles.dragHintText}>Pinch to zoom · Tap chips to switch</span>
         </div>
       </div>
 
