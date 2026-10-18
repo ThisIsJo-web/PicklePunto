@@ -1,0 +1,45 @@
+.toggle {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-full);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-surface);
+  color: var(--color-brand-500);
+  border: 2px solid var(--color-border);
+  box-shadow: var(--edge-neutral);
+  transition: transform var(--transition-fast), background var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.toggle:hover {
+  background: var(--color-lime-soft);
+  border-color: var(--color-lime-500);
+  transform: translateY(-1px);
+}
+
+.toggle:active {
+  transform: translateY(2px);
+  box-shadow: none;
+}
+
+.off {
+  color: var(--color-text-muted);
+  background: var(--color-bg-subtle);
+}
+
+.wave1,
+.wave2 {
+  transform-origin: 12px 12px;
+  animation: wave 1.8s ease-in-out infinite;
+}
+
+.wave2 {
+  animation-delay: 0.25s;
+}
+
+@keyframes wave {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}

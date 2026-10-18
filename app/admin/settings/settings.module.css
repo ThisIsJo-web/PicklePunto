@@ -1,0 +1,178 @@
+/* Facility Settings Styles — Vanilla CSS */
+
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+/* Settings Form Sections */
+.sectionCard {
+  background: var(--color-bg-secondary, var(--color-bg-surface));
+  border: 1px solid var(--color-border, var(--color-border));
+  border-radius: 14px;
+  padding: 1.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  box-shadow: 0 4px 20px hsl(160 40% 15% / 0.07);
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 1rem;
+}
+
+.sectionIcon {
+  font-size: 1.5rem;
+}
+
+.sectionTitle h3 {
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--color-text-primary, var(--color-text-primary));
+  margin-bottom: 0.2rem;
+}
+
+.sectionTitle p {
+  font-size: 0.85rem;
+  color: var(--color-text-secondary, var(--color-text-secondary));
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.25rem;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.formGroup label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.fieldHelper {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  font-weight: 400;
+}
+
+.formInput,
+.formSelect {
+  width: 100%;
+  padding: 0.65rem 0.85rem;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-text-primary);
+  font-size: 0.9rem;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.formInput:focus,
+.formSelect:focus {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+}
+
+/* Callout Box for Critical Rules */
+.ruleCallout {
+  background: rgba(2, 132, 199, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--color-text-primary);
+  line-height: 1.4;
+}
+
+.ruleCalloutIcon {
+  font-size: 1.2rem;
+  flex-shrink: 0;
+}
+
+/* Bottom Action Bar */
+.bottomBar {
+  position: sticky;
+  bottom: 1.5rem;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 12px;
+  padding: 1rem 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 10px 30px hsl(160 40% 15% / 0.15);
+  z-index: 50;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.statusMessage {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.statusSuccess {
+  color: var(--ink-green);
+}
+
+.statusError {
+  color: var(--ink-red);
+}
+
+.actionsRight {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* ── Mobile Responsive Pass ── */
+@media (max-width: 768px) {
+  .sectionCard {
+    padding: 1.25rem;
+  }
+
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .bottomBar {
+    flex-direction: column;
+    align-items: stretch;
+    bottom: 0.5rem;
+    padding: 0.85rem 1rem;
+  }
+
+  .actionsRight {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .actionsRight button {
+    flex: 1;
+  }
+}
+

@@ -1,0 +1,93 @@
+.bottomNav {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .bottomNav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: var(--bottom-nav-h, 68px);
+    background: rgba(255, 255, 255, 0.94);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-top: 2px solid var(--color-border);
+    box-shadow: 0 -4px 20px rgba(15, 42, 29, 0.08);
+    z-index: 50;
+    padding: 0 var(--space-3) env(safe-area-inset-bottom, 0);
+    justify-content: space-around;
+    align-items: center;
+  }
+
+  .navBtn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 6px 12px;
+    border-radius: var(--radius-lg);
+    color: var(--color-text-secondary);
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all var(--transition-fast);
+    flex: 1;
+    max-width: 80px;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  .navBtn:active {
+    transform: scale(0.92);
+  }
+
+  .navIcon {
+    font-size: 1.25rem;
+    line-height: 1;
+    transition: transform var(--transition-fast);
+  }
+
+  .navBtnActive {
+    color: var(--color-brand-700);
+  }
+
+  .navBtnActive .navIcon {
+    transform: translateY(-2px) scale(1.15);
+  }
+
+  .navBtnActive .navLabel {
+    color: var(--color-brand-700);
+    font-weight: 700;
+  }
+
+  /* Center CTA Button - floating sporty pill */
+  .bookCtaBtn {
+    background: var(--color-coral-500);
+    color: #ffffff !important;
+    border: 2px solid var(--color-coral-600);
+    box-shadow: var(--edge-coral);
+    border-radius: var(--radius-xl);
+    padding: 8px 14px;
+    margin-top: -16px;
+    transform: translateY(0);
+    transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+  }
+
+  .bookCtaBtn:active {
+    transform: translateY(3px) scale(0.96) !important;
+    box-shadow: 0 1px 0 hsl(12 78% 38%) !important;
+  }
+
+  .bookCtaBtn .navIcon {
+    font-size: 1.35rem;
+  }
+
+  .bookCtaBtn .navLabel {
+    color: #ffffff;
+    font-family: var(--font-display);
+    font-weight: 700;
+  }
+}

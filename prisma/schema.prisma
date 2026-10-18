@@ -1,0 +1,279 @@
+// ─── Prisma Schema — PicklePunto ─────────────────────────────────────────────
+// Mirrors the database schema defined in IMPLEMENTATION_PLAN.md §4
+// All tables, enums, and relations included (even for future phases) so
+// migrations are done once during Phase 1.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  PLAYER
+  STAFF
+  ADMIN
+}
+
+enum BookingStatus {
+  PENDING
+  AWAITING_PAYMENT
+  CONFIRMED
+  CANCELLED
+  NO_SHOW
+}
+
+enum ParticipantPaymentStatus {
+  PENDING
+  PAID
+}
+
+enum ProductCategory {
+  RENTAL
+  RETAIL
+  FOOD_DRINK
+}
+
+enum TabStatus {
+  OPEN
+  CLOSED
+}
+
+enum PaymentMethod {
+  CASH
+  EWALLET
+  SPLIT
+}
+
+enum NotificationType {
+  EMAIL
+}
+
+// ─── Users ────────────────────────────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  fullName  String   @map("full_name")
+  phone     String?
+  role      UserRole @default(PLAYER)
+  notes     String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  bookingsAsLeader    Booking[]             @relation("LeadBooker")
+  bookingParticipants BookingParticipant[]
+  paymentConfirmed    Booking[]             @relation("PaymentConfirmer")
+  posTabs             PosTab[]
+  notificationLogs    NotificationLog[]
+
+  @@map("users")
+}
+
+// ─── Courts ───────────────────────────────────────────────────────────────────
+
+model Court {
+  id          String   @id @default(uuid())
+  name        String
+  surfaceType String   @map("surface_type")
+  isActive    Boolean  @default(true) @map("is_active")
+  hourlyRate  Decimal  @map("hourly_rate") @db.Decimal(10, 2)
+  openingTime String   @map("opening_time") // "HH:MM" — per-court operating hours
+  closingTime String   @map("closing_time") // "HH:MM" — per-court operating hours
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  bookings    Booking[]
+  courtBlocks CourtBlock[]
+  posTabs     PosTab[]
+
+  @@map("courts")
+}
+
+model CourtBlock {
+  id          String   @id @default(uuid())
+  courtId     String   @map("court_id")
+  blockedFrom DateTime @map("blocked_from")
+  blockedTo   DateTime @map("blocked_to")
+  reason      String?
+  createdBy   String   @map("created_by") // User id (staff/admin)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  court Court @relation(fields: [courtId], references: [id], onDelete: Cascade)
+
+  @@index([courtId, blockedFrom, blockedTo])
+  @@map("court_blocks")
+}
+
+// ─── Bookings ─────────────────────────────────────────────────────────────────
+
+model Booking {
+  id                 String        @id @default(uuid())
+  courtId            String        @map("court_id")
+  leadBookerId       String        @map("lead_booker_id")
+  startTime          DateTime      @map("start_time")
+  endTime            DateTime      @map("end_time")
+  durationMinutes    Int           @map("duration_minutes")
+  status             BookingStatus @default(PENDING)
+  totalAmount        Decimal       @map("total_amount") @db.Decimal(10, 2)
+  paymentConfirmedBy String?       @map("payment_confirmed_by") // Staff user id
+  paymentConfirmedAt DateTime?     @map("payment_confirmed_at")
+  isWalkIn           Boolean       @default(false) @map("is_walk_in")
+  walkInGuestName    String?       @map("walk_in_guest_name")
+  walkInGuestPhone   String?       @map("walk_in_guest_phone")
+  walkInGuestEmail   String?       @map("walk_in_guest_email")
+  notes              String?
+  createdAt          DateTime      @default(now()) @map("created_at")
+
+  // Relations
+  court            Court                @relation(fields: [courtId], references: [id])
+  leadBooker       User                 @relation("LeadBooker", fields: [leadBookerId], references: [id])
+  paymentConfirmer User?                @relation("PaymentConfirmer", fields: [paymentConfirmedBy], references: [id])
+  participants     BookingParticipant[]
+  addons           BookingAddon[]
+  transactions     Transaction[]
+
+  @@index([courtId, startTime, endTime])
+  @@index([leadBookerId, status])
+  @@index([status, startTime])
+  @@map("bookings")
+}
+
+model BookingParticipant {
+  id            String                   @id @default(uuid())
+  bookingId     String                   @map("booking_id")
+  userId        String                   @map("user_id")
+  shareAmount   Decimal                  @map("share_amount") @db.Decimal(10, 2)
+  paymentStatus ParticipantPaymentStatus @default(PENDING) @map("payment_status")
+  createdAt     DateTime                 @default(now()) @map("created_at")
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@unique([bookingId, userId])
+  @@map("booking_participants")
+}
+
+// ─── Products & Inventory ─────────────────────────────────────────────────────
+
+model Product {
+  id                String          @id @default(uuid())
+  name              String
+  category          ProductCategory
+  price             Decimal         @db.Decimal(10, 2)
+  stockQty          Int             @default(0) @map("stock_qty")
+  lowStockThreshold Int             @default(5) @map("low_stock_threshold")
+  sku               String?         @unique
+  createdAt         DateTime        @default(now()) @map("created_at")
+
+  // Relations
+  bookingAddons BookingAddon[]
+  posTabItems   PosTabItem[]
+
+  @@index([category])
+  @@map("products")
+}
+
+model BookingAddon {
+  id        String   @id @default(uuid())
+  bookingId String   @map("booking_id")
+  productId String   @map("product_id")
+  quantity  Int
+  unitPrice Decimal  @map("unit_price") @db.Decimal(10, 2)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@map("booking_addons")
+}
+
+// ─── POS / Tabs ───────────────────────────────────────────────────────────────
+
+model PosTab {
+  id       String    @id @default(uuid())
+  courtId  String?   @map("court_id")
+  playerId String?   @map("player_id")
+  openedAt DateTime  @default(now()) @map("opened_at")
+  closedAt DateTime? @map("closed_at")
+  status   TabStatus @default(OPEN)
+
+  court        Court?        @relation(fields: [courtId], references: [id])
+  player       User?         @relation(fields: [playerId], references: [id])
+  items        PosTabItem[]
+  transactions Transaction[]
+
+  @@index([courtId, status])
+  @@index([playerId, status])
+  @@map("pos_tabs")
+}
+
+model PosTabItem {
+  id        String   @id @default(uuid())
+  tabId     String   @map("tab_id")
+  productId String   @map("product_id")
+  quantity  Int
+  unitPrice Decimal  @map("unit_price") @db.Decimal(10, 2)
+  addedAt   DateTime @default(now()) @map("added_at")
+
+  tab     PosTab  @relation(fields: [tabId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@map("pos_tab_items")
+}
+
+model Transaction {
+  id               String        @id @default(uuid())
+  tabId            String?       @map("tab_id")
+  bookingId        String?       @map("booking_id")
+  amount           Decimal       @db.Decimal(10, 2)
+  paymentMethod    PaymentMethod @map("payment_method")
+  paymentReference String?       @map("payment_reference") // e-wallet reference # (manual)
+  receiptUrl       String?       @map("receipt_url")
+  createdAt        DateTime      @default(now()) @map("created_at")
+
+  tab     PosTab?  @relation(fields: [tabId], references: [id])
+  booking Booking? @relation(fields: [bookingId], references: [id])
+
+  @@index([tabId])
+  @@index([bookingId])
+  @@index([createdAt])
+  @@map("transactions")
+}
+
+// ─── Notifications ────────────────────────────────────────────────────────────
+// Schema ready; actual delivery held until email provider is finalized.
+
+model NotificationLog {
+  id       String           @id @default(uuid())
+  userId   String           @map("user_id")
+  type     NotificationType
+  template String
+  sentAt   DateTime?        @map("sent_at")
+  status   String           @default("QUEUED") // QUEUED | SENT | FAILED
+  payload  Json?            // email body data for audit / retry
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, status])
+  @@map("notification_log")
+}
+
+// ─── Facility Settings ────────────────────────────────────────────────────────
+// Key-value store for facility-wide config.
+// Seeded values: cancellation_grace_hours=12, court_count=4, location_mode=SINGLE
+
+model FacilitySetting {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("facility_settings")
+}

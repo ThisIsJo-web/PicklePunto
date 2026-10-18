@@ -1,0 +1,31 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px var(--space-3);
+  border-radius: var(--radius-full);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--badge-color, var(--color-text-secondary));
+  background: var(--badge-bg, var(--color-bg-subtle));
+  border: 1.5px solid color-mix(in srgb, var(--badge-color, var(--color-text-muted)) 28%, transparent);
+  white-space: nowrap;
+}
+
+/* A little status dot in front of every badge */
+.badge::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+/* Live states pulse so staff/players can spot them at a glance */
+.badge[data-status='USING']::before,
+.badge[data-status='IN_USE']::before {
+  animation: ping 1.4s cubic-bezier(0, 0, 0.2, 1) infinite;
+}

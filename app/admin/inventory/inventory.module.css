@@ -1,0 +1,654 @@
+/* Inventory Management Styles — Vanilla CSS */
+
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* Header & Controls */
+.topBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.titleArea h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--color-text-primary, var(--color-text-primary));
+  letter-spacing: -0.02em;
+  margin-bottom: 0.25rem;
+}
+
+.titleArea p {
+  color: var(--color-text-secondary, var(--color-text-secondary));
+  font-size: 0.9rem;
+}
+
+.topActions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+/* Stats Row */
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.statCard {
+  background: var(--color-bg-surface);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-2xl);
+  padding: 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  box-shadow: 0 4px 0 var(--color-border);
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.statCard:hover {
+  transform: translateY(-2px);
+  border-color: var(--color-lime-500);
+  box-shadow: 0 6px 0 var(--color-border-strong);
+}
+
+.statIcon {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  flex-shrink: 0;
+  background: var(--color-wash);
+}
+
+.statInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.statLabel {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted, var(--color-text-muted));
+  font-weight: 600;
+}
+
+.statValue {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--color-text-primary, var(--color-text-primary));
+}
+
+.statValueDanger {
+  color: var(--ink-red) !important;
+}
+
+.statValueSuccess {
+  color: var(--ink-green) !important;
+}
+
+/* Low Stock Alert Banner */
+.alertBanner {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(245, 158, 11, 0.1));
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  animation: pulseBorder 3s infinite ease-in-out;
+}
+
+@keyframes pulseBorder {
+  0%, 100% { border-color: rgba(239, 68, 68, 0.35); }
+  50% { border-color: rgba(239, 68, 68, 0.7); }
+}
+
+.alertContent {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.alertIcon {
+  font-size: 1.5rem;
+}
+
+.alertText h4 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--ink-red);
+  margin-bottom: 0.15rem;
+}
+
+.alertText p {
+  font-size: 0.85rem;
+  color: var(--color-text-primary);
+}
+
+/* Filter & Search Bar */
+.filterBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  background: var(--color-bg-secondary, var(--color-bg-surface));
+  border: 1px solid var(--color-border, var(--color-border));
+  padding: 0.85rem 1.25rem;
+  border-radius: 12px;
+}
+
+.searchBox {
+  position: relative;
+  min-width: 280px;
+  flex: 1;
+  max-width: 400px;
+}
+
+.searchIcon {
+  position: absolute;
+  left: 0.85rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
+.searchInput {
+  width: 100%;
+  padding: 0.6rem 0.85rem 0.6rem 2.4rem;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--color-border, var(--color-border));
+  border-radius: 8px;
+  color: var(--color-text-primary);
+  font-size: 0.9rem;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.searchInput:focus {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+}
+
+.filterPills {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.pillBtn {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--color-border, var(--color-border));
+  color: var(--color-text-secondary);
+  padding: 0.45rem 0.85rem;
+  border-radius: 20px;
+  font-size: 0.825rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.pillBtn:hover {
+  background: rgba(56, 189, 248, 0.1);
+  color: var(--color-text-primary);
+  border-color: rgba(56, 189, 248, 0.4);
+}
+
+.pillBtnActive {
+  background: #0284c7;
+  color: #fff;
+  border-color: #38bdf8;
+  font-weight: 600;
+}
+
+.pillBtnDanger {
+  color: var(--ink-red);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.pillBtnDangerActive {
+  background: #dc2626;
+  color: #fff;
+  border-color: #f87171;
+}
+
+/* Products Table */
+.tableContainer {
+  background: var(--color-bg-secondary, var(--color-bg-surface));
+  border: 1px solid var(--color-border, var(--color-border));
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 8px 24px hsl(160 40% 15% / 0.07);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.table th {
+  background: rgba(255, 255, 255, 0.9);
+  padding: 0.85rem 1.25rem;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-secondary);
+  border-bottom: 1px solid var(--color-border, var(--color-border));
+  font-weight: 600;
+}
+
+.table td {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-primary);
+  font-size: 0.9rem;
+  vertical-align: middle;
+}
+
+.table tr:last-child td {
+  border-bottom: none;
+}
+
+.table tr:hover td {
+  background: var(--color-wash);
+}
+
+.productCell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.productName {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.productCategory {
+  font-size: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.skuCode {
+  font-family: monospace;
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  background: var(--color-wash);
+  padding: 0.2rem 0.45rem;
+  border-radius: 4px;
+}
+
+/* Stock Status Display */
+.stockWrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 120px;
+}
+
+.stockNumbers {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+}
+
+.stockQtyCurrent {
+  font-weight: 700;
+}
+
+.stockBarBg {
+  width: 100%;
+  height: 6px;
+  background: var(--color-wash);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.stockBarFill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.stockBarNormal {
+  background: #10b981;
+}
+
+.stockBarLow {
+  background: #f59e0b;
+}
+
+.stockBarOut {
+  background: #ef4444;
+}
+
+/* Action Buttons */
+.actionBtns {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.quickAdjustBtn {
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  color: var(--ink-blue);
+  padding: 0.35rem 0.65rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  transition: all 0.2s;
+}
+
+.quickAdjustBtn:hover {
+  background: #0284c7;
+  color: #fff;
+  border-color: #38bdf8;
+}
+
+.iconBtn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--color-text-secondary);
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.iconBtn:hover {
+  background: var(--color-wash);
+  color: var(--color-text-primary);
+  border-color: var(--color-line-soft);
+}
+
+.iconBtnDanger:hover {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--ink-red);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+/* Empty State */
+.emptyState {
+  padding: 3.5rem 1.5rem;
+  text-align: center;
+  color: var(--color-text-secondary);
+}
+
+.emptyState p {
+  margin-top: 0.5rem;
+  font-size: 0.9rem;
+}
+
+/* Modal Overlay & Modal Window */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: var(--color-overlay);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.modal {
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 16px;
+  width: 100%;
+  max-width: 520px;
+  box-shadow: 0 20px 40px hsl(160 40% 15% / 0.15);
+  overflow: hidden;
+  animation: modalPop 0.2s ease-out;
+}
+
+@keyframes modalPop {
+  from {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.modalHeader {
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modalHeader h3 {
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.modalCloseBtn {
+  background: transparent;
+  border: none;
+  color: var(--color-text-secondary);
+  font-size: 1.25rem;
+  cursor: pointer;
+  padding: 0.25rem;
+}
+
+.modalCloseBtn:hover {
+  color: var(--color-text-primary);
+}
+
+.modalBody {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.formGroup label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.formInput,
+.formSelect {
+  width: 100%;
+  padding: 0.65rem 0.85rem;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-text-primary);
+  font-size: 0.9rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.formInput:focus,
+.formSelect:focus {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+}
+
+.formRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.modalFooter {
+  padding: 1.25rem 1.5rem;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-wash);
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+/* Quick Stock Adjustment Specifics */
+.stockAdjustmentCurrent {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.adjustModeTabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.adjustModeBtn {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  padding: 0.5rem;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.2s;
+}
+
+.adjustModeBtn:hover {
+  background: rgba(56, 189, 248, 0.1);
+  color: var(--color-text-primary);
+}
+
+.adjustModeBtnActive {
+  background: rgba(56, 189, 248, 0.2);
+  border-color: #38bdf8;
+  color: var(--ink-blue);
+  font-weight: 600;
+}
+
+.reasonSuggestions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.25rem;
+}
+
+.reasonTag {
+  background: var(--color-wash);
+  border: 1px solid var(--color-line-soft);
+  color: var(--color-text-secondary);
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.reasonTag:hover {
+  background: rgba(56, 189, 248, 0.2);
+  color: var(--ink-blue);
+  border-color: #38bdf8;
+}
+
+.previewResult {
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  font-size: 0.9rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* ── Mobile Responsive Pass ── */
+@media (max-width: 768px) {
+  .topBar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .topActions {
+    width: 100%;
+  }
+
+  .topActions button {
+    flex: 1;
+  }
+
+  .tableContainer {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .table {
+    min-width: 650px;
+  }
+
+  .filterBar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .searchBox {
+    max-width: 100%;
+    min-width: 100%;
+  }
+
+  .filterPills {
+    overflow-x: auto;
+    padding-bottom: 0.25rem;
+  }
+
+  .modal {
+    max-width: 95vw;
+    margin: auto;
+  }
+
+  .formRow {
+    grid-template-columns: 1fr;
+  }
+}
+

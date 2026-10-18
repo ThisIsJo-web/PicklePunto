@@ -1,0 +1,779 @@
+'use client';
+
+import { useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import Button from '@/components/ui/Button';
+import Badge from '@/components/ui/Badge';
+import { formatTime, formatDate } from '@/lib/utils/date';
+import CourtStage from '@/components/court3d/CourtStage';
+import type { StageCourt } from '@/components/court3d/types';
+import SoundToggle from '@/components/sfx/SoundToggle';
+import PlayerBottomNav from '@/components/layout/PlayerBottomNav';
+import { useSfx } from '@/components/sfx/SfxProvider';
+import styles from './book.module.css';
+
+interface Court {
+  id: string;
+  name: string;
+  surfaceType: string;
+  hourlyRate: string;
+  openingTime: string;
+  closingTime: string;
+}
+
+interface Product {
+  id: string;
+  name: string;
+  category: string;
+  price: string;
+  stockQuantity: number;
+}
+
+interface Slot {
+  startTime: string;
+  endTime: string;
+  durationMinutes: number;
+}
+
+interface CourtAvailability {
+  courtId: string;
+  courtName: string;
+  surfaceType: string;
+  hourlyRate: string;
+  openingTime: string;
+  closingTime: string;
+  availableSlots: Slot[];
+}
+
+function getLocalDateString(date: Date = new Date()): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+export default function PlayerBookingWizardPage() {
+  const router = useRouter();
+  const supabase = createSupabaseBrowserClient();
+
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const todayStr = useMemo(() => getLocalDateString(), []);
+
+  // Wizard state
+  const { play } = useSfx();
+  const [selectedDate, setSelectedDate] = useState(() => getLocalDateString());
+  const [selectedDuration, setSelectedDuration] = useState<30 | 60 | 90>(60);
+  const [courts, setCourts] = useState<Court[]>([]);
+  const [availability, setAvailability] = useState<CourtAvailability[]>([]);
+  const [selectedCourtId, setSelectedCourtId] = useState<string>('');
+  const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null);
+
+  const bookingStageCourts: StageCourt[] = useMemo(() => {
+    return courts.map((c) => ({
+      id: c.id,
+      name: c.name,
+      state: 'AVAILABLE',
+      caption: `${c.surfaceType} · ₱${parseFloat(c.hourlyRate).toFixed(0)}/hr`,
+    }));
+  }, [courts]);
+
+  // Add-ons & Split
+  const [products, setProducts] = useState<Product[]>([]);
+  const [addonQuantities, setAddonQuantities] = useState<Record<string, number>>({});
+  const [splitCount, setSplitCount] = useState<number>(1);
+  const [paymentRef, setPaymentRef] = useState<string>('');
+  const [notes, setNotes] = useState<string>('');
+
+  // E-wallet info
+  const [ewallet, setEwallet] = useState<{
+    accountName: string;
+    gcashNumber: string;
+    mayaNumber: string;
+  }>({
+    accountName: 'PicklePunto Sports Center',
+    gcashNumber: '0917-888-PUNTO',
+    mayaNumber: '0918-999-PUNTO',
+  });
+
+  // Success view state
+  const [confirmedBooking, setConfirmedBooking] = useState<any | null>(null);
+
+  // Quick date tabs: Today, Tomorrow, +2 Days
+  const dateOptions = useMemo(() => {
+    const dates = [];
+    const now = new Date();
+    for (let i = 0; i < 5; i++) {
+      const d = new Date(now);
+      d.setDate(now.getDate() + i);
+      const str = getLocalDateString(d);
+      const label =
+        i === 0
+          ? 'Today'
+          : i === 1
+          ? 'Tomorrow'
+          : d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+      dates.push({ date: str, label });
+    }
+    return dates;
+  }, []);
+
+  // 1. Check Auth & Load initial courts + products
+  useEffect(() => {
+    async function init() {
+      try {
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        if (!authUser) {
+          router.push('/login');
+          return;
+        }
+        setUser(authUser);
+
+        // Fetch courts
+        const courtsRes = await fetch('/api/courts');
+        const courtsJson = await courtsRes.json();
+        if (courtsJson.data && courtsJson.data.length > 0) {
+          setCourts(courtsJson.data);
+          setSelectedCourtId(courtsJson.data[0].id);
+        }
+
+        // Fetch rental & retail products
+        const prodRes = await fetch('/api/products');
+        const prodJson = await prodRes.json();
+        if (prodJson.data) {
+          setProducts(prodJson.data.filter((p: Product) => p.category === 'RENTAL' || p.category === 'RETAIL'));
+        }
+
+        // Fetch e-wallet info
+        const ewRes = await fetch('/api/payments/ewallet-info');
+        const ewJson = await ewRes.json();
+        if (ewJson.data) {
+          setEwallet(ewJson.data);
+        }
+      } catch (err) {
+        console.error('Failed to load initial data:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    init();
+  }, [router, supabase]);
+
+  // 2. Fetch Availability when Date, Duration, or Courts change
+  useEffect(() => {
+    async function fetchAvail() {
+      if (!selectedDate) return;
+      try {
+        const res = await fetch(
+          `/api/courts/availability?date=${selectedDate}&duration=${selectedDuration}`
+        );
+        const json = await res.json();
+        if (json.data) {
+          setAvailability(json.data);
+          // If previously selected slot is no longer valid, clear it
+          setSelectedSlot(null);
+        }
+      } catch (err) {
+        console.error('Error fetching court availability:', err);
+      }
+    }
+    fetchAvail();
+  }, [selectedDate, selectedDuration]);
+
+  // Active court object & available slots for selected court
+  const activeCourt = useMemo(() => {
+    return courts.find((c) => c.id === selectedCourtId) || courts[0];
+  }, [courts, selectedCourtId]);
+
+  const courtSlots = useMemo(() => {
+    const courtAvail = availability.find((a) => a.courtId === selectedCourtId);
+    const slots = courtAvail?.availableSlots || [];
+    const now = Date.now();
+    return slots.filter((s) => new Date(s.startTime).getTime() > now);
+  }, [availability, selectedCourtId]);
+
+  // Dynamic pricing calculation
+  const courtFee = useMemo(() => {
+    if (!activeCourt) return 0;
+    const hourly = parseFloat(activeCourt.hourlyRate) || 0;
+    return (hourly * selectedDuration) / 60;
+  }, [activeCourt, selectedDuration]);
+
+  const addonsTotal = useMemo(() => {
+    return Object.entries(addonQuantities).reduce((acc, [prodId, qty]) => {
+      const prod = products.find((p) => p.id === prodId);
+      if (!prod || qty <= 0) return acc;
+      return acc + parseFloat(prod.price) * qty;
+    }, 0);
+  }, [addonQuantities, products]);
+
+  const totalAmount = courtFee + addonsTotal;
+  const sharePerPlayer = splitCount > 0 ? totalAmount / splitCount : totalAmount;
+
+  function updateAddonQty(prodId: string, delta: number) {
+    setAddonQuantities((prev) => {
+      const current = prev[prodId] || 0;
+      const next = Math.max(0, current + delta);
+      return { ...prev, [prodId]: next };
+    });
+  }
+
+  // Handle Booking Submission
+  async function handleSubmitBooking(e?: React.SyntheticEvent) {
+    if (e && typeof e.preventDefault === 'function') {
+      e.preventDefault();
+    }
+    if (!selectedSlot || !activeCourt || !user) {
+      setError('Please select an available time slot to reserve.');
+      return;
+    }
+
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      const formattedAddons = Object.entries(addonQuantities)
+        .filter(([_, qty]) => qty > 0)
+        .map(([productId, quantity]) => ({ productId, quantity }));
+
+      const payload = {
+        courtId: activeCourt.id,
+        leadBookerId: user.id,
+        startTime: selectedSlot.startTime,
+        durationMinutes: selectedDuration,
+        participantCount: splitCount,
+        notes: [
+          paymentRef ? `E-Wallet Ref: ${paymentRef}` : '',
+          notes ? `Player Note: ${notes}` : '',
+        ]
+          .filter(Boolean)
+          .join(' | '),
+        addons: formattedAddons,
+        initialStatus: 'AWAITING_PAYMENT',
+      };
+
+      const res = await fetch('/api/bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const json = await res.json();
+      if (!res.ok || json.error) {
+        play('error');
+        throw new Error(json.error || 'Failed to submit booking');
+      }
+
+      play('success');
+      setConfirmedBooking(json.data);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Reservation failed';
+      setError(msg);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className={styles.container}>
+        <div style={{ textAlign: 'center', padding: '100px 0' }}>
+          <p>Loading PicklePunto Booking Engine...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Success Celebration Screen ──
+  if (confirmedBooking) {
+    return (
+      <div className={styles.container}>
+        <header className={styles.header}>
+          <div className={styles.headerInner}>
+            <div className={styles.headerLeft}>
+              <Link href="/portal" className={styles.brand}>
+                <span className={styles.brandIcon}>🏓</span>
+                <span>PicklePunto</span>
+              </Link>
+              <span className={styles.badge}>Reservation Confirmed</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+              <SoundToggle />
+              <Link href="/portal">
+                <Button variant="ghost" size="sm">
+                  Dashboard
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </header>
+
+        <main className={styles.main}>
+          <div className={styles.successContainer}>
+            <span className={styles.successIcon}>🎉</span>
+            <h1 className={styles.successTitle}>Court Reserved Successfully!</h1>
+            <p className={styles.successDesc}>
+              Your court is reserved at PicklePunto. Our staff will verify your e-wallet payment on-site or via counter check-in.
+            </p>
+
+            <div className={styles.successCard}>
+              <div className={styles.successRow}>
+                <span style={{ color: 'var(--color-text-secondary)' }}>Reservation ID:</span>
+                <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{confirmedBooking.id}</span>
+              </div>
+              <div className={styles.successRow}>
+                <span style={{ color: 'var(--color-text-secondary)' }}>Court:</span>
+                <span style={{ fontWeight: 600 }}>{confirmedBooking.court?.name || activeCourt?.name}</span>
+              </div>
+              <div className={styles.successRow}>
+                <span style={{ color: 'var(--color-text-secondary)' }}>Time & Duration:</span>
+                <span>
+                  {formatDate(confirmedBooking.startTime)} · {formatTime(confirmedBooking.startTime)} ({confirmedBooking.durationMinutes} mins)
+                </span>
+              </div>
+              <div className={styles.successRow}>
+                <span style={{ color: 'var(--color-text-secondary)' }}>Total Due:</span>
+                <span style={{ color: 'var(--color-coral-500)', fontWeight: 700, fontSize: '1.25rem' }}>
+                  ₱{parseFloat(confirmedBooking.totalAmount).toFixed(2)}
+                </span>
+              </div>
+              <div className={styles.successRow}>
+                <span style={{ color: 'var(--color-text-secondary)' }}>Status:</span>
+                <Badge label="Reserved · Awaiting Pay" status="AWAITING_PAYMENT" />
+              </div>
+            </div>
+
+            <div className={styles.successActions}>
+              <Link href="/portal" style={{ textDecoration: 'none' }}>
+                <Button variant="primary" size="lg" style={{ width: '100%' }} data-sfx="whoosh">
+                  View in My Reservations
+                </Button>
+              </Link>
+
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setConfirmedBooking(null);
+                  setSelectedSlot(null);
+                }}
+              >
+                Book Another Court
+              </Button>
+            </div>
+          </div>
+        </main>
+        <PlayerBottomNav />
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.container}>
+      {/* Header */}
+      <header className={styles.header}>
+        <div className={styles.headerInner}>
+          <div className={styles.headerLeft}>
+            <Link href="/portal" className={styles.brand}>
+              <span className={styles.brandIcon}>🏓</span>
+              <span>PicklePunto</span>
+            </Link>
+            <span className={styles.badge}>Player Self-Service</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+            <SoundToggle />
+            <Link href="/portal">
+              <Button variant="ghost" size="sm">
+                ← Back to Dashboard
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </header>
+
+      <main className={styles.main}>
+        <div className={styles.titleSection}>
+          <h1 className={styles.pageTitle}>Reserve a Pickleball Court</h1>
+          <p className={styles.pageSubtitle}>
+            Select your preferred court, session duration, and equipment add-ons with instant confirmation.
+          </p>
+        </div>
+
+        {error && (
+          <div
+            style={{
+              padding: 'var(--space-3) var(--space-4)',
+              background: 'rgba(239, 68, 68, 0.15)',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
+              borderRadius: 'var(--radius-lg)',
+              color: 'var(--ink-red)',
+              marginBottom: 'var(--space-6)',
+              fontSize: 'var(--text-sm)',
+            }}
+          >
+            ⚠️ {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmitBooking} className={styles.wizardGrid}>
+          {/* Main Booking Wizard Column */}
+          <div className={styles.flowColumn}>
+            {/* Step 1: Date & Duration */}
+            <div className={styles.card}>
+              <div className={styles.cardHeader}>
+                <span className={styles.stepNumber}>1</span>
+                <h2 className={styles.cardTitle}>Choose Date & Duration Block</h2>
+              </div>
+
+              {/* Date selection */}
+              <div className={styles.dateRow}>
+                {dateOptions.map((opt) => (
+                  <button
+                    type="button"
+                    key={opt.date}
+                    className={`${styles.datePill} ${
+                      selectedDate === opt.date ? styles.datePillActive : ''
+                    }`}
+                    onClick={() => setSelectedDate(opt.date)}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+                <input
+                  type="date"
+                  value={selectedDate}
+                  min={todayStr}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val && val < todayStr) return;
+                    setSelectedDate(val);
+                  }}
+                  style={{
+                    background: 'var(--color-bg-subtle)',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 'var(--radius-lg)',
+                    color: 'var(--color-text-primary)',
+                    padding: '0 var(--space-3)',
+                    fontSize: 'var(--text-sm)',
+                  }}
+                />
+              </div>
+
+              {/* Flexible Duration Blocks (30/60/90 mins) */}
+              <div className={styles.durationRow}>
+                {[30, 60, 90].map((d) => (
+                  <button
+                    type="button"
+                    key={d}
+                    className={`${styles.durationBtn} ${
+                      selectedDuration === d ? styles.durationBtnActive : ''
+                    }`}
+                    onClick={() => setSelectedDuration(d as 30 | 60 | 90)}
+                  >
+                    <span className={styles.durationTitle}>{d} Minutes</span>
+                    <span className={styles.durationSub}>
+                      {d === 30 ? '0.5 hr block' : d === 60 ? 'Standard 1 hr' : '1.5 hr tournament'}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Step 2: Court & Time Slot Selection */}
+            <div className={styles.card}>
+              <div className={styles.cardHeader}>
+                <span className={styles.stepNumber}>2</span>
+                <h2 className={styles.cardTitle}>Select Court & Available Time Slot</h2>
+              </div>
+
+              {/* 3D Court Showcase for Chosen Court */}
+              <div style={{ marginBottom: 'var(--space-5)' }}>
+                <CourtStage
+                  courts={bookingStageCourts}
+                  selectedCourtId={selectedCourtId}
+                  onSelectCourt={(id) => {
+                    play('select');
+                    setSelectedCourtId(id);
+                    setSelectedSlot(null);
+                  }}
+                  title={`${activeCourt?.name || 'Pickleball Court'} (3D Cartoon View)`}
+                  subtitle="Rotate, inspect court lines, and tap court chips to switch"
+                />
+              </div>
+
+              {/* Court Cards */}
+              <div className={styles.courtsGrid}>
+                {courts.map((court) => {
+                  const isSelected = court.id === selectedCourtId;
+                  return (
+                    <button
+                      type="button"
+                      key={court.id}
+                      data-sfx="select"
+                      className={`${styles.courtCard} ${
+                        isSelected ? styles.courtCardSelected : ''
+                      }`}
+                      onClick={() => {
+                        play('select');
+                        setSelectedCourtId(court.id);
+                        setSelectedSlot(null);
+                      }}
+                    >
+                      <div className={styles.courtName}>{court.name}</div>
+                      <div className={styles.courtMeta}>
+                        <span>{court.surfaceType}</span>
+                        <span className={styles.courtRate}>
+                          ₱{parseFloat(court.hourlyRate).toFixed(2)}/hr
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '0.75rem', opacity: 0.85 }}>
+                        Hours: {court.openingTime} – {court.closingTime}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Available Slots for Active Court */}
+              <div className={styles.slotsSectionTitle}>
+                Available Slots for {activeCourt?.name} on {selectedDate} ({selectedDuration} mins):
+              </div>
+
+              {courtSlots.length === 0 ? (
+                <div className={styles.noSlotsNotice}>
+                  No available {selectedDuration}-minute slots remaining on this court for the selected date. Try another court or duration block.
+                </div>
+              ) : (
+                <div className={styles.slotsGrid}>
+                  {courtSlots.map((slot) => {
+                    const isSlotSelected = selectedSlot?.startTime === slot.startTime;
+                    return (
+                      <button
+                        type="button"
+                        key={slot.startTime}
+                        data-sfx="pop"
+                        className={`${styles.slotBtn} ${
+                          isSlotSelected ? styles.slotBtnSelected : ''
+                        }`}
+                        onClick={() => {
+                          play('select');
+                          setSelectedSlot(slot);
+                        }}
+                      >
+                        {formatTime(slot.startTime)}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Step 3: Equipment Rental Add-ons */}
+            <div className={styles.card}>
+              <div className={styles.cardHeader}>
+                <span className={styles.stepNumber}>3</span>
+                <h2 className={styles.cardTitle}>Equipment Rental Add-ons (Optional)</h2>
+              </div>
+
+              <div className={styles.addonsList}>
+                {products.map((prod) => {
+                  const qty = addonQuantities[prod.id] || 0;
+                  return (
+                    <div key={prod.id} className={styles.addonItem}>
+                      <div className={styles.addonInfo}>
+                        <span className={styles.addonName}>{prod.name}</span>
+                        <span className={styles.addonPrice}>
+                          ₱{parseFloat(prod.price).toFixed(2)} each · {prod.stockQuantity} available
+                        </span>
+                      </div>
+                      <div className={styles.addonControls}>
+                        <button
+                          type="button"
+                          className={styles.counterBtn}
+                          disabled={qty <= 0}
+                          onClick={() => updateAddonQty(prod.id, -1)}
+                        >
+                          -
+                        </button>
+                        <span className={styles.counterVal}>{qty}</span>
+                        <button
+                          type="button"
+                          className={styles.counterBtn}
+                          disabled={qty >= prod.stockQuantity}
+                          onClick={() => updateAddonQty(prod.id, 1)}
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Step 4: Split Payment Option */}
+            <div className={styles.card}>
+              <div className={styles.cardHeader}>
+                <span className={styles.stepNumber}>4</span>
+                <h2 className={styles.cardTitle}>Split Payment Shares</h2>
+              </div>
+
+              <div className={styles.splitSection}>
+                <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+                  Are you sharing this reservation with other players?
+                </div>
+                <div className={styles.splitButtons}>
+                  {[1, 2, 3, 4].map((count) => (
+                    <button
+                      type="button"
+                      key={count}
+                      className={`${styles.splitBtn} ${
+                        splitCount === count ? styles.splitBtnActive : ''
+                      }`}
+                      onClick={() => setSplitCount(count)}
+                    >
+                      {count === 1 ? '1 Player (Full)' : `${count} Players`}
+                    </button>
+                  ))}
+                </div>
+
+                {splitCount > 1 && (
+                  <div className={styles.splitShareBanner}>
+                    <span>Calculated Share per Player ({splitCount} ways):</span>
+                    <span className={styles.splitShareValue}>
+                      ₱{sharePerPlayer.toFixed(2)} / player
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Sticky Summary & Checkout Sidebar */}
+          <div className={styles.summarySidebar}>
+            <div className={styles.summaryCard}>
+              <div className={styles.summaryHeader}>
+                <span>Reservation Summary</span>
+                <Badge label="New Booking" status="OPEN" />
+              </div>
+
+              <div className={styles.summaryLineItems}>
+                <div className={styles.summaryRow}>
+                  <span>Court:</span>
+                  <span style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                    {activeCourt?.name}
+                  </span>
+                </div>
+                <div className={styles.summaryRow}>
+                  <span>Date & Duration:</span>
+                  <span>
+                    {selectedDate} · {selectedDuration}m
+                  </span>
+                </div>
+                <div className={styles.summaryRow}>
+                  <span>Selected Time:</span>
+                  <span style={{ fontWeight: 600, color: selectedSlot ? 'var(--color-brand-accent)' : 'var(--ink-red)' }}>
+                    {selectedSlot ? formatTime(selectedSlot.startTime) : 'Select a slot'}
+                  </span>
+                </div>
+                <div className={styles.summaryRow}>
+                  <span>Court Rental Fee:</span>
+                  <span>₱{courtFee.toFixed(2)}</span>
+                </div>
+
+                {addonsTotal > 0 && (
+                  <div className={styles.summaryRow}>
+                    <span>Gear Rentals Add-on:</span>
+                    <span>₱{addonsTotal.toFixed(2)}</span>
+                  </div>
+                )}
+
+                <div className={styles.summaryRowTotal}>
+                  <span>Total Due:</span>
+                  <span className={styles.totalAmount}>₱{totalAmount.toFixed(2)}</span>
+                </div>
+
+                {splitCount > 1 && (
+                  <div className={styles.summaryRow} style={{ color: 'var(--color-brand-accent)', fontWeight: 600 }}>
+                    <span>Your Share (1 of {splitCount}):</span>
+                    <span>₱{sharePerPlayer.toFixed(2)}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* E-wallet Skeleton Payment Instructions */}
+              <div className={styles.ewalletCard}>
+                <div className={styles.ewalletTitle}>
+                  <span>📲</span>
+                  <span>E-Wallet Transfer Skeleton</span>
+                </div>
+                <div className={styles.ewalletDetail}>
+                  <span>Recipient:</span>
+                  <strong>{ewallet.accountName}</strong>
+                </div>
+                <div className={styles.ewalletDetail}>
+                  <span>GCash Mobile:</span>
+                  <strong>{ewallet.gcashNumber}</strong>
+                </div>
+                <div className={styles.ewalletDetail}>
+                  <span>Maya Mobile:</span>
+                  <strong>{ewallet.mayaNumber}</strong>
+                </div>
+              </div>
+
+              {/* Reference number and notes input */}
+              <div className={styles.refInputGroup}>
+                <label htmlFor="input-pay-ref" className={styles.refLabel}>
+                  E-Wallet Reference # (Optional)
+                </label>
+                <input
+                  id="input-pay-ref"
+                  className={styles.refInput}
+                  placeholder="e.g. GCASH-1234567890"
+                  value={paymentRef}
+                  onChange={(e) => setPaymentRef(e.target.value)}
+                />
+              </div>
+
+              <div className={styles.refInputGroup}>
+                <label htmlFor="input-notes" className={styles.refLabel}>
+                  Notes for Facility Staff
+                </label>
+                <input
+                  id="input-notes"
+                  className={styles.refInput}
+                  placeholder="e.g. Beginners game, right net"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                />
+              </div>
+
+              <Button
+                id="btn-submit-booking"
+                type="button"
+                onClick={() => handleSubmitBooking()}
+                variant="primary"
+                size="lg"
+                loading={submitting}
+                disabled={!selectedSlot || submitting}
+                style={{ width: '100%' }}
+              >
+                {selectedSlot ? 'Reserve Court Slot' : 'Select Time Slot to Continue'}
+              </Button>
+
+              <p className={styles.policyNotice}>
+                🛡️ 12-Hour Cancellation Policy: Free cancellation up to 12 hours before session start.
+              </p>
+            </div>
+          </div>
+        </form>
+      </main>
+      <PlayerBottomNav />
+    </div>
+  );
+}
