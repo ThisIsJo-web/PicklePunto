@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma/client';
 import { apiSuccess, apiError } from '@/types';
 import { differenceInHours } from 'date-fns';
 
+export const dynamic = 'force-dynamic';
+
 interface RouteParams {
   params: { id: string };
 }

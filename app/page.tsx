@@ -1,6 +1,8 @@
 import { redirect } from 'next/navigation';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
+export const dynamic = 'force-dynamic';
+
 // ─── Root Page ─────────────────────────────────────────────────────────────────
 // Redirects authenticated users to the appropriate area based on role.
 // Unauthenticated users are sent to login.
