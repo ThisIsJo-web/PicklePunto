@@ -622,6 +622,52 @@
   color: var(--color-text-muted);
 }
 
+/* ── Mobile Responsive Pass ── */
+@media (max-width: 768px) {
+  .posContainer {
+    grid-template-columns: 1fr;
+    gap: var(--space-4);
+  }
+
+  .cartPane {
+    position: static;
+    top: auto;
+  }
+
+  .productGrid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 8px;
+  }
+
+  .productCard {
+    padding: var(--space-3);
+  }
+
+  .priceTag {
+    font-size: 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .productGrid {
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+
+  .productName {
+    font-size: 0.8rem;
+  }
+
+  .cartPane {
+    padding: var(--space-3);
+  }
+
+  .btnCharge {
+    padding: 12px;
+    font-size: 0.95rem;
+  }
+}
+
 @media print {
   .posContainer,
   .cartPane,

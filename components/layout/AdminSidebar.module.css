@@ -4,6 +4,7 @@
   left: 0;
   width: var(--sidebar-width);
   height: 100vh;
+  height: 100dvh;
   background: var(--color-bg-raised);
   border-right: 1px solid var(--color-border);
   display: flex;
@@ -11,6 +12,8 @@
   z-index: 40;
   overflow-y: auto;
   transition: transform var(--transition-normal);
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 /* ── Logo ── */

@@ -1,10 +1,13 @@
 .container {
   min-height: 100vh;
+  min-height: 100dvh;
+  max-width: 100vw;
+  overflow-x: hidden;
   background: radial-gradient(circle at 50% 0%, rgba(34, 197, 94, 0.06) 0%, transparent 60%),
               var(--color-bg-base);
   display: flex;
   flex-direction: column;
-  padding-bottom: var(--space-12);
+  padding-bottom: calc(var(--bottom-nav-h, 68px) + env(safe-area-inset-bottom, 0px) + 24px);
 }
 
 .header {
@@ -19,7 +22,7 @@
 .headerInner {
   max-width: 1200px;
   margin: 0 auto;
-  padding: var(--space-4) var(--space-6);
+  padding: max(var(--space-3), env(safe-area-inset-top, 0px)) var(--space-6) var(--space-3);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -427,10 +430,10 @@
   margin-top: var(--space-2);
 }
 
-/* ── Mobile Responsive Pass ── */
+/* ── Mobile Responsive Pass (Zero Overflow, Native App Feel) ── */
 @media (max-width: 768px) {
   .headerInner {
-    padding: var(--space-3) var(--space-4);
+    padding: max(10px, env(safe-area-inset-top, 0px)) 14px 10px;
     gap: var(--space-2);
   }
 
@@ -439,44 +442,124 @@
   }
 
   .main {
-    padding: var(--space-5) var(--space-4);
+    padding: 14px 12px;
+    max-width: 100vw;
+    box-sizing: border-box;
+    overflow-x: hidden;
   }
 
   .welcomeHero {
     flex-direction: column;
     align-items: flex-start;
-    gap: var(--space-4);
+    gap: var(--space-3);
+    margin-bottom: var(--space-5);
+    padding-bottom: var(--space-4);
   }
 
   .heroTitle {
-    font-size: var(--text-2xl);
+    font-size: 1.45rem;
+  }
+
+  .heroSubtitle {
+    font-size: 0.85rem;
+  }
+
+  .courtStatusGrid {
+    grid-template-columns: 1fr !important;
+    gap: 8px;
+  }
+
+  .courtStatusCard {
+    padding: 12px 14px;
+  }
+
+  .tabsRow {
+    gap: 6px;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    scroll-snap-type: x mandatory;
+    margin-bottom: var(--space-4);
+    padding-bottom: 4px;
+  }
+
+  .tabsRow::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tabBtn {
+    scroll-snap-align: start;
+    flex-shrink: 0;
+    white-space: nowrap;
+    padding: 6px 12px;
+    font-size: 0.78rem;
+  }
+
+  .bookingsGrid {
+    grid-template-columns: 1fr !important;
+    gap: 12px;
   }
 
   .bookingCard {
-    flex-direction: column;
-    align-items: stretch;
-    gap: var(--space-4);
+    padding: 14px;
+    border-radius: var(--radius-xl);
   }
 
-  .bookingActions {
+  .cardTop {
     flex-direction: row;
-    justify-content: flex-end;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+
+  .cardActions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .modalCard {
+    padding: 18px 14px;
+    max-width: calc(100vw - 24px);
+    margin: 0 auto;
   }
 }
 
 @media (max-width: 480px) {
-  .courtStatusGrid {
-    grid-template-columns: 1fr !important;
+  .brandName {
+    font-size: 1.15rem;
   }
 
-  .bookingActions {
+  .badge {
+    display: none;
+  }
+
+  .heroTitle {
+    font-size: 1.3rem;
+  }
+
+  .cardActions {
     flex-direction: column;
     width: 100%;
   }
 
-  .bookingActions button,
-  .bookingActions a {
+  .cardActions button,
+  .cardActions a {
     width: 100%;
+  }
+}
+
+@media (max-width: 360px) {
+  .main {
+    padding: 10px 8px;
+  }
+
+  .heroTitle {
+    font-size: 1.2rem;
+  }
+
+  .bookingCard {
+    padding: 12px 10px;
   }
 }
 

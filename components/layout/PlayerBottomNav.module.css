@@ -9,16 +9,18 @@
     bottom: 0;
     left: 0;
     right: 0;
-    height: var(--bottom-nav-h, 68px);
-    background: rgba(255, 255, 255, 0.94);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border-top: 2px solid var(--color-border);
-    box-shadow: 0 -4px 20px rgba(15, 42, 29, 0.08);
+    height: calc(64px + env(safe-area-inset-bottom, 0px));
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-top: 1.5px solid var(--color-border);
+    box-shadow: 0 -4px 24px rgba(15, 42, 29, 0.08);
     z-index: 50;
-    padding: 0 var(--space-3) env(safe-area-inset-bottom, 0);
+    padding: 4px var(--space-2) env(safe-area-inset-bottom, 0px);
     justify-content: space-around;
     align-items: center;
+    max-width: 100vw;
+    box-sizing: border-box;
   }
 
   .navBtn {
@@ -27,7 +29,7 @@
     align-items: center;
     justify-content: center;
     gap: 3px;
-    padding: 6px 12px;
+    padding: 6px 8px;
     border-radius: var(--radius-lg);
     color: var(--color-text-secondary);
     font-size: 0.7rem;
@@ -35,9 +37,10 @@
     text-decoration: none;
     transition: all var(--transition-fast);
     flex: 1;
-    max-width: 80px;
+    max-width: 76px;
     user-select: none;
     -webkit-user-select: none;
+    touch-action: manipulation;
   }
 
   .navBtn:active {
@@ -68,10 +71,10 @@
     background: var(--color-coral-500);
     color: #ffffff !important;
     border: 2px solid var(--color-coral-600);
-    box-shadow: var(--edge-coral);
+    box-shadow: var(--edge-coral), 0 4px 14px rgba(255, 107, 74, 0.3);
     border-radius: var(--radius-xl);
-    padding: 8px 14px;
-    margin-top: -16px;
+    padding: 8px 12px;
+    margin-top: -18px;
     transform: translateY(0);
     transition: transform var(--transition-fast), box-shadow var(--transition-fast);
   }
@@ -82,12 +85,27 @@
   }
 
   .bookCtaBtn .navIcon {
-    font-size: 1.35rem;
+    font-size: 1.3rem;
   }
 
   .bookCtaBtn .navLabel {
     color: #ffffff;
     font-family: var(--font-display);
     font-weight: 700;
+  }
+}
+
+@media (max-width: 360px) {
+  .navBtn {
+    padding: 4px 4px;
+    max-width: 64px;
+    font-size: 0.65rem;
+  }
+  .navIcon {
+    font-size: 1.1rem;
+  }
+  .bookCtaBtn {
+    padding: 6px 10px;
+    margin-top: -14px;
   }
 }

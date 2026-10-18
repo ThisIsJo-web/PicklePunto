@@ -5,13 +5,21 @@ import SfxProvider from '@/components/sfx/SfxProvider';
 export const metadata: Metadata = {
   title: { default: 'PicklePunto', template: '%s | PicklePunto' },
   description: 'Book pickleball courts, join the fun, and run your facility — PicklePunto.',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'PicklePunto',
+  },
+  applicationName: 'PicklePunto',
 };
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
   viewportFit: 'cover',
-  themeColor: '#ffffff',
+  themeColor: '#0f2a1d',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
