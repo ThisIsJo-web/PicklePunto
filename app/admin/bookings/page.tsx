@@ -470,7 +470,7 @@ export default function AdminBookingsPage() {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
                     <div>
                       <label style={{ fontSize: '11px', color: 'var(--color-text-secondary)', display: 'block' }}>
-                        Paddle Rentals ($5 each)
+                        Paddle Rentals (₱5 each)
                       </label>
                       <input
                         type="number"
@@ -483,7 +483,7 @@ export default function AdminBookingsPage() {
                     </div>
                     <div>
                       <label style={{ fontSize: '11px', color: 'var(--color-text-secondary)', display: 'block' }}>
-                        Ball Can 3-pk ($9.50)
+                        Ball Can 3-pk (₱9.50)
                       </label>
                       <input
                         type="number"

@@ -308,7 +308,7 @@ export default function AdminCourtsPage() {
 
                 <Input
                   id="court-rate"
-                  label="Hourly Rate ($ USD)"
+                  label="Hourly Rate (₱ PHP)"
                   type="number"
                   step="0.50"
                   min="0"

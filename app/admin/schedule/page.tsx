@@ -78,6 +78,16 @@ export default function AdminSchedulePage() {
   const [submittingBlock, setSubmittingBlock] = useState(false);
   const [blockError, setBlockError] = useState<string | null>(null);
 
+  // Open Play Modal State
+  const [isOpenPlayModalOpen, setIsOpenPlayModalOpen] = useState(false);
+  const [openPlayCourtId, setOpenPlayCourtId] = useState('');
+  const [openPlayDate, setOpenPlayDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
+  const [openPlayStartTime, setOpenPlayStartTime] = useState('17:00');
+  const [openPlayEndTime, setOpenPlayEndTime] = useState('20:00');
+  const [openPlayTitle, setOpenPlayTitle] = useState('Community Open Play · All Skill Levels');
+  const [submittingOpenPlay, setSubmittingOpenPlay] = useState(false);
+  const [openPlayError, setOpenPlayError] = useState<string | null>(null);
+
   // Payment Verification State
   const [verifyingPayment, setVerifyingPayment] = useState(false);
   const [paymentRef, setPaymentRef] = useState('');
@@ -531,13 +541,72 @@ export default function AdminSchedulePage() {
   }
 
   // Remove block
-  async function handleRemoveBlock(blockId: string) {
-    if (!confirm('Unblock this court time?')) return;
+  async function handleRemoveBlock(blockId: string, promptMsg?: string) {
+    if (!confirm(promptMsg || 'Unblock this court time?')) return;
     try {
       await fetch(`/api/court-blocks/${blockId}`, { method: 'DELETE' });
+      showToast('Court time released successfully');
       loadSchedule();
     } catch (err) {
       console.error('Error removing block:', err);
+    }
+  }
+
+  function handleOpenOpenPlayModal(courtId?: string, timeSlot?: string) {
+    setOpenPlayCourtId(courtId || (courts[0]?.id || ''));
+    setOpenPlayDate(dateStr);
+    if (timeSlot) {
+      setOpenPlayStartTime(timeSlot);
+      const [h, m] = timeSlot.split(':').map(Number);
+      const endH = String(Math.min(23, h + 2)).padStart(2, '0');
+      setOpenPlayEndTime(`${endH}:${String(m).padStart(2, '0')}`);
+    } else {
+      setOpenPlayStartTime('17:00');
+      setOpenPlayEndTime('20:00');
+    }
+    setOpenPlayTitle('Community Open Play · All Skill Levels');
+    setOpenPlayError(null);
+    setIsOpenPlayModalOpen(true);
+  }
+
+  async function handleCreateOpenPlay(e: React.FormEvent) {
+    e.preventDefault();
+    if (!openPlayCourtId) {
+      setOpenPlayError('Please select a court');
+      return;
+    }
+    setSubmittingOpenPlay(true);
+    setOpenPlayError(null);
+
+    try {
+      const startIso = new Date(`${openPlayDate}T${openPlayStartTime}:00`).toISOString();
+      const endIso = new Date(`${openPlayDate}T${openPlayEndTime}:00`).toISOString();
+
+      const res = await fetch('/api/court-blocks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          courtId: openPlayCourtId,
+          blockedFrom: startIso,
+          blockedTo: endIso,
+          reason: `Open Play: ${openPlayTitle.trim() || 'Community Session'}`,
+          createdBy: 'Admin (Open Play)',
+        }),
+      });
+
+      const json = await res.json();
+      if (!res.ok || json.error) {
+        throw new Error(json.error || 'Failed to schedule Open Play session');
+      }
+
+      setIsOpenPlayModalOpen(false);
+      showToast('Open Play session scheduled successfully!');
+      loadSchedule();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error scheduling Open Play';
+      setOpenPlayError(msg);
+    } finally {
+      setSubmittingOpenPlay(false);
     }
   }
 
@@ -610,17 +679,24 @@ export default function AdminSchedulePage() {
         title="Court Schedule Timeline"
         subtitle="Real-time multi-court schedule grid respecting individual operating hours & court blocks"
         actions={
-          <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+          <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+            <Button
+              id="btn-schedule-open-play"
+              variant="primary"
+              onClick={() => handleOpenOpenPlayModal()}
+            >
+              🎾 Schedule Open Play
+            </Button>
             <Button
               id="btn-walkin-booking"
-              variant="primary"
+              variant="secondary"
               onClick={() => handleOpenWalkInModal()}
             >
               ⚡ Walk-in Booking
             </Button>
             <Button
               id="btn-block-court"
-              variant="secondary"
+              variant="ghost"
               onClick={() => handleOpenBlockModal()}
             >
               🔒 Block Court
@@ -829,19 +905,36 @@ export default function AdminSchedulePage() {
 
                         if (cell.kind === 'block') {
                           const { block, span } = cell;
+                          const isOpenPlay = /open\s*play/i.test(block.reason || '');
                           return (
                             <td key={court.id} rowSpan={span} className={styles.slotCell}>
                               <button
                                 type="button"
-                                className={styles.blockedBlock}
-                                onClick={() => handleRemoveBlock(block.id)}
-                                title={`Blocked: ${block.reason || 'Maintenance'}. Click to unblock.`}
+                                className={`${styles.blockedBlock} ${isOpenPlay ? styles.openPlayBlock : ''}`}
+                                onClick={() =>
+                                  handleRemoveBlock(
+                                    block.id,
+                                    isOpenPlay
+                                      ? 'Cancel this scheduled Open Play session?'
+                                      : 'Unblock this court time?'
+                                  )
+                                }
+                                title={`${isOpenPlay ? 'Open Play Session' : 'Blocked'}: ${
+                                  block.reason || 'Maintenance'
+                                }. Click to ${isOpenPlay ? 'cancel' : 'unblock'}.`}
                               >
-                                <span className={styles.blockedTitle}>🔒 {block.reason || 'Court Blocked'}</span>
+                                <span className={styles.blockedTitle}>
+                                  {isOpenPlay ? '🎾 ' : '🔒 '}
+                                  {block.reason || 'Court Blocked'}
+                                </span>
                                 <span className={styles.blockedSubtitle}>
                                   {formatTime(block.blockedFrom)} – {formatTime(block.blockedTo)}
                                 </span>
-                                {span >= 2 && <span className={styles.blockedHint}>Tap to unblock</span>}
+                                {span >= 2 && (
+                                  <span className={styles.blockedHint}>
+                                    {isOpenPlay ? 'Tap to cancel Open Play' : 'Tap to unblock'}
+                                  </span>
+                                )}
                               </button>
                             </td>
                           );
@@ -1499,6 +1592,98 @@ export default function AdminSchedulePage() {
                   </Button>
                   <Button id="btn-confirm-block" type="submit" variant="danger" loading={submittingBlock}>
                     Confirm Block
+                  </Button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* ── Open Play Scheduling Modal ── */}
+        {isOpenPlayModalOpen && (
+          <div className={pageStyles.modalBackdrop}>
+            <div className={pageStyles.modalCard} role="dialog" aria-modal="true">
+              <div className={pageStyles.modalHeader}>
+                <h2 className={pageStyles.modalTitle}>🎾 Schedule Open Play Session</h2>
+                <button
+                  type="button"
+                  className={pageStyles.modalClose}
+                  onClick={() => setIsOpenPlayModalOpen(false)}
+                >
+                  ✕
+                </button>
+              </div>
+
+              {openPlayError && (
+                <div style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', color: 'var(--color-error)', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)', fontSize: 'var(--text-sm)' }}>
+                  {openPlayError}
+                </div>
+              )}
+
+              <form onSubmit={handleCreateOpenPlay} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-1)' }}>
+                    Select Court for Open Play
+                  </label>
+                  <select
+                    id="openplay-court-select"
+                    value={openPlayCourtId}
+                    onChange={(e) => setOpenPlayCourtId(e.target.value)}
+                    style={{ width: '100%', background: 'var(--color-bg-raised)', border: '1px solid var(--color-border)', color: 'var(--color-text-primary)', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-sm)' }}
+                    required
+                  >
+                    {courts.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <Input
+                  id="openplay-date"
+                  label="Session Date"
+                  type="date"
+                  value={openPlayDate}
+                  onChange={(e) => setOpenPlayDate(e.target.value)}
+                  required
+                />
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
+                  <Input
+                    id="openplay-start-time"
+                    label="Start Time"
+                    type="time"
+                    value={openPlayStartTime}
+                    onChange={(e) => setOpenPlayStartTime(e.target.value)}
+                    required
+                  />
+
+                  <Input
+                    id="openplay-end-time"
+                    label="End Time"
+                    type="time"
+                    value={openPlayEndTime}
+                    onChange={(e) => setOpenPlayEndTime(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <Input
+                  id="openplay-title"
+                  label="Session Description / Level"
+                  placeholder="e.g. Community Open Play · All Skill Levels"
+                  value={openPlayTitle}
+                  onChange={(e) => setOpenPlayTitle(e.target.value)}
+                  required
+                />
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', marginTop: 'var(--space-2)' }}>
+                  <Button type="button" variant="ghost" onClick={() => setIsOpenPlayModalOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button id="btn-confirm-openplay" type="submit" variant="primary" loading={submittingOpenPlay}>
+                    Confirm Open Play
                   </Button>
                 </div>
               </form>

@@ -7,7 +7,6 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import Court from './Court';
 import type { StageCourt, CourtVisualState } from './types';
 import { STATE_LABEL } from './types';
-import SoundToggle from '@/components/sfx/SoundToggle';
 import { useSfx } from '@/components/sfx/SfxProvider';
 import styles from './CourtStage.module.css';
 
@@ -129,8 +128,8 @@ export default function CourtStage({
   courts = DEFAULT_COURTS,
   selectedCourtId,
   onSelectCourt,
-  title = 'Pickleball Arena (Live 3D)',
-  subtitle = 'Actual 3D cartoon courts syncing real-time availability',
+  title = 'Live Court View',
+  subtitle = 'Real-time 3D court availability',
   className = '',
   initialMode = 'focus',
   height,
@@ -211,7 +210,7 @@ export default function CourtStage({
         <div className={styles.titleArea}>
           <div className={styles.badge3D}>
             <span>🏟️</span>
-            <span>3D Court View</span>
+            <span>3D Court</span>
           </div>
           <div>
             <h3 className={styles.stageTitle}>{title}</h3>
@@ -245,23 +244,6 @@ export default function CourtStage({
             <span>🌐</span>
             <span>All Courts</span>
           </button>
-
-          {/* Animate play/pause */}
-          <button
-            type="button"
-            className={styles.pillBtn}
-            onClick={() => {
-              play('tap');
-              setAnimate((prev) => !prev);
-            }}
-            aria-pressed={animate}
-            title={animate ? 'Pause 3D rally animation' : 'Resume 3D animation'}
-          >
-            <span>{animate ? '⏸️' : '▶️'}</span>
-          </button>
-
-          {/* Global Sound Toggle */}
-          <SoundToggle />
         </div>
       </div>
 
@@ -270,7 +252,7 @@ export default function CourtStage({
         {!mounted ? (
           <div className={styles.fallbackContainer}>
             <span className={styles.bouncingBall}>🏓</span>
-            <span>Loading 3D Cartoon Arena...</span>
+            <span>Loading 3D Courts...</span>
           </div>
         ) : (
           <Canvas
@@ -335,7 +317,7 @@ export default function CourtStage({
           >
             <span>{touchOrbit ? '🔄 Orbit Mode (Tap to Lock)' : '👆 Tap to Rotate 3D Court'}</span>
           </button>
-          <span className={styles.dragHintText}>Pinch to zoom · Tap chips to switch</span>
+          <span className={styles.dragHintText}>Tap a court chip to switch</span>
         </div>
       </div>
 

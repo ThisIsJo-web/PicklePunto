@@ -350,6 +350,60 @@
   transform: translateY(-2px);
 }
 
+.slotBtnFaded {
+  opacity: 0.45;
+  background: var(--color-bg-subtle) !important;
+  border-color: var(--color-border) !important;
+  color: var(--color-text-muted) !important;
+  box-shadow: none !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+}
+
+.slotBtnFaded:hover {
+  border-color: var(--color-border) !important;
+  background: var(--color-bg-subtle) !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.slotTimeText {
+  display: block;
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.slotStatusTag {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  margin-top: 3px;
+}
+
+.tagAvailable {
+  background: rgba(34, 197, 94, 0.15);
+  color: #15803d;
+}
+
+.tagBooked {
+  background: rgba(239, 68, 68, 0.15);
+  color: #b91c1c;
+}
+
+.tagOpenPlay {
+  background: rgba(14, 165, 233, 0.15);
+  color: #0284c7;
+}
+
+.tagPlaying {
+  background: rgba(132, 204, 22, 0.2);
+  color: #4d7c0f;
+}
+
 .noSlotsNotice {
   padding: var(--space-5);
   text-align: center;

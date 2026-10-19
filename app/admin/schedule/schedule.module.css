@@ -1022,3 +1022,28 @@
     bottom: 20px;
   }
 }
+
+/* Open Play Special Block */
+.openPlayBlock {
+  background: #f0fdf4 !important;
+  background-image: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(16, 185, 129, 0.08) 10px, rgba(16, 185, 129, 0.08) 20px) !important;
+  border: 1.5px solid #86efac !important;
+  border-left: 5px solid #16a34a !important;
+}
+
+.openPlayBlock:hover {
+  filter: brightness(0.97) !important;
+  box-shadow: 0 4px 12px rgba(22, 163, 74, 0.15) !important;
+}
+
+.openPlayBlock .blockedTitle {
+  color: #15803d !important;
+}
+
+.openPlayBlock .blockedSubtitle {
+  color: #166534 !important;
+}
+
+.openPlayBlock .blockedHint {
+  color: #15803d !important;
+}

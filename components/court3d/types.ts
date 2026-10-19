@@ -17,30 +17,35 @@ export interface StageCourt {
 export const STATE_LABEL: Record<CourtVisualState, string> = {
   AVAILABLE: 'Open',
   USING: 'Playing',
-  RESERVED: 'Held',
-  BOOKED: 'Booked',
+  RESERVED: 'Open',
+  BOOKED: 'Fully Booked',
   BLOCKED: 'Blocked',
   CLOSED: 'Closed',
 };
 
-/** Normalise any backend status string to a visual state. */
+/** Normalise any backend status string to a visual state. 
+ *  Per system requirements: 3 main statuses: Open (AVAILABLE), Fully Booked (BOOKED), Playing (USING), plus Blocked.
+ *  Pending/Awaiting Payment records do not mark court as playing or held.
+ */
 export function toVisualState(s: string | undefined | null): CourtVisualState {
   switch ((s || '').toUpperCase()) {
     case 'USING':
+    case 'PLAYING':
     case 'IN_USE':
     case 'IN_PROGRESS':
       return 'USING';
-    case 'RESERVED':
-    case 'AWAITING_PAYMENT':
-    case 'PENDING':
-      return 'RESERVED';
     case 'BOOKED':
-    case 'CONFIRMED':
+    case 'FULLY_BOOKED':
       return 'BOOKED';
     case 'BLOCKED':
       return 'BLOCKED';
     case 'CLOSED':
       return 'CLOSED';
+    case 'AVAILABLE':
+    case 'OPEN':
+    case 'RESERVED':
+    case 'AWAITING_PAYMENT':
+    case 'PENDING':
     default:
       return 'AVAILABLE';
   }

@@ -1,13 +1,22 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma/client';
 import { apiSuccess, apiError } from '@/types';
-import { parseISO, addMinutes, isBefore, isAfter, isEqual } from 'date-fns';
+import { addMinutes, isBefore, isAfter, isEqual } from 'date-fns';
 
 export const dynamic = 'force-dynamic';
 
 // Helper to convert "HH:MM" on a given date to a Date object in local time
 function timeStringToDate(dateStr: string, timeStr: string): Date {
   return new Date(`${dateStr}T${timeStr}:00`);
+}
+
+export interface SlotDto {
+  startTime: string;
+  endTime: string;
+  durationMinutes: number;
+  isAvailable: boolean;
+  status: 'available' | 'booked' | 'playing' | 'blocked' | 'open_play' | 'past';
+  statusLabel: string;
 }
 
 export async function GET(request: Request) {
@@ -70,12 +79,12 @@ export async function GET(request: Request) {
       },
     });
 
-    // Compute available slots per court
+    // Compute slots per court
     const courtAvailability = courts.map((court) => {
       const courtOpen = timeStringToDate(dateParam, court.openingTime);
       const courtClose = timeStringToDate(dateParam, court.closingTime);
 
-      const slots: { startTime: string; endTime: string; durationMinutes: number }[] = [];
+      const allSlots: SlotDto[] = [];
 
       let currentSlotStart = courtOpen;
 
@@ -87,14 +96,8 @@ export async function GET(request: Request) {
           break;
         }
 
-        // ── Constraint: Disallow past slots (before or equal to current time) ──
-        if (isBefore(currentSlotStart, now) || isEqual(currentSlotStart, now)) {
-          currentSlotStart = addMinutes(currentSlotStart, 30);
-          continue;
-        }
-
         // Check if overlaps any active booking for this court
-        const bookingOverlap = bookings.some((b) => {
+        const overlappingBooking = bookings.find((b) => {
           if (b.courtId !== court.id) return false;
           const bStart = new Date(b.startTime);
           const bEnd = new Date(b.endTime);
@@ -105,7 +108,7 @@ export async function GET(request: Request) {
         });
 
         // Check if overlaps any court block
-        const blockOverlap = blocks.some((blk) => {
+        const overlappingBlock = blocks.find((blk) => {
           if (blk.courtId !== court.id) return false;
           const blkStart = new Date(blk.blockedFrom);
           const blkEnd = new Date(blk.blockedTo);
@@ -115,15 +118,55 @@ export async function GET(request: Request) {
           );
         });
 
-        if (!bookingOverlap && !blockOverlap) {
-          slots.push({
-            startTime: currentSlotStart.toISOString(),
-            endTime: currentSlotEnd.toISOString(),
-            durationMinutes: duration,
-          });
+        const isPast = isBefore(currentSlotStart, now) || isEqual(currentSlotStart, now);
+        const isCurrentPlaying =
+          overlappingBooking &&
+          overlappingBooking.status === 'CONFIRMED' &&
+          isBefore(new Date(overlappingBooking.startTime), now) &&
+          isAfter(new Date(overlappingBooking.endTime), now);
+
+        let isAvailable = false;
+        let status: SlotDto['status'] = 'available';
+        let statusLabel = 'Available';
+
+        if (overlappingBlock) {
+          const reason = overlappingBlock.reason || '';
+          if (/open\s*play/i.test(reason)) {
+            status = 'open_play';
+            statusLabel = 'Open Play';
+          } else {
+            status = 'blocked';
+            statusLabel = 'Maintenance';
+          }
+          isAvailable = false;
+        } else if (isCurrentPlaying) {
+          status = 'playing';
+          statusLabel = 'Playing Now';
+          isAvailable = false;
+        } else if (overlappingBooking) {
+          status = 'booked';
+          statusLabel = 'Booked';
+          isAvailable = false;
+        } else if (isPast) {
+          status = 'past';
+          statusLabel = 'Past';
+          isAvailable = false;
+        } else {
+          status = 'available';
+          statusLabel = 'Available';
+          isAvailable = true;
         }
 
-        // Step by 30-minute intervals to support staggered start times
+        allSlots.push({
+          startTime: currentSlotStart.toISOString(),
+          endTime: currentSlotEnd.toISOString(),
+          durationMinutes: duration,
+          isAvailable,
+          status,
+          statusLabel,
+        });
+
+        // Step by 30-minute intervals to support flexible start times
         currentSlotStart = addMinutes(currentSlotStart, 30);
       }
 
@@ -134,7 +177,8 @@ export async function GET(request: Request) {
         hourlyRate: court.hourlyRate.toString(),
         openingTime: court.openingTime,
         closingTime: court.closingTime,
-        availableSlots: slots,
+        availableSlots: allSlots.filter((s) => s.isAvailable),
+        allSlots,
       };
     });
 

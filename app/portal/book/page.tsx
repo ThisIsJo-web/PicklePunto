@@ -9,7 +9,6 @@ import Badge from '@/components/ui/Badge';
 import { formatTime, formatDate } from '@/lib/utils/date';
 import CourtStage from '@/components/court3d/CourtStage';
 import type { StageCourt } from '@/components/court3d/types';
-import SoundToggle from '@/components/sfx/SoundToggle';
 import { useSfx } from '@/components/sfx/SfxProvider';
 import styles from './book.module.css';
 
@@ -35,6 +34,9 @@ interface Slot {
   startTime: string;
   endTime: string;
   durationMinutes: number;
+  isAvailable?: boolean;
+  status?: 'available' | 'booked' | 'playing' | 'blocked' | 'open_play' | 'past';
+  statusLabel?: string;
 }
 
 interface CourtAvailability {
@@ -45,6 +47,7 @@ interface CourtAvailability {
   openingTime: string;
   closingTime: string;
   availableSlots: Slot[];
+  allSlots?: Slot[];
 }
 
 function getLocalDateString(date: Date = new Date()): string {
@@ -198,9 +201,8 @@ export default function PlayerBookingWizardPage() {
 
   const courtSlots = useMemo(() => {
     const courtAvail = availability.find((a) => a.courtId === selectedCourtId);
-    const slots = courtAvail?.availableSlots || [];
-    const now = Date.now();
-    return slots.filter((s) => new Date(s.startTime).getTime() > now);
+    if (!courtAvail) return [];
+    return courtAvail.allSlots || courtAvail.availableSlots || [];
   }, [availability, selectedCourtId]);
 
   // Dynamic pricing calculation
@@ -309,7 +311,6 @@ export default function PlayerBookingWizardPage() {
               <span className={styles.badge}>Reservation Confirmed</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-              <SoundToggle />
               <Link href="/portal">
                 <Button variant="ghost" size="sm">
                   Dashboard
@@ -388,10 +389,9 @@ export default function PlayerBookingWizardPage() {
               <span className={styles.brandIcon}>🏓</span>
               <span>PicklePunto</span>
             </Link>
-            <span className={styles.badge}>Player Self-Service</span>
+            <span className={styles.badge}>Court Reservation</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-            <SoundToggle />
             <Link href="/portal">
               <Button variant="ghost" size="sm">
                 <span className={styles.backBtnDesktop}>← Back to Dashboard</span>
@@ -483,7 +483,7 @@ export default function PlayerBookingWizardPage() {
                   >
                     <span className={styles.durationTitle}>{d} Minutes</span>
                     <span className={styles.durationSub}>
-                      {d === 30 ? '0.5 hr block' : d === 60 ? 'Standard 1 hr' : '1.5 hr tournament'}
+                      {d === 30 ? '30 mins' : d === 60 ? '1 hour' : '1.5 hours'}
                     </span>
                   </button>
                 ))}
@@ -494,7 +494,7 @@ export default function PlayerBookingWizardPage() {
             <div className={styles.card}>
               <div className={styles.cardHeader}>
                 <span className={styles.stepNumber}>2</span>
-                <h2 className={styles.cardTitle}>Select Court & Available Time Slot</h2>
+                <h2 className={styles.cardTitle}>Select Court & Time Slot</h2>
               </div>
 
               {/* 3D Court Showcase for Chosen Court */}
@@ -508,7 +508,7 @@ export default function PlayerBookingWizardPage() {
                     setSelectedSlot(null);
                   }}
                   title={activeCourt ? `${activeCourt.name.split(/ - |—/)[0]} · 3D View` : '3D Court View'}
-                  subtitle="Rotate, inspect court lines, and tap court chips to switch"
+                  subtitle="Tap a court chip to switch courts"
                 />
               </div>
 
@@ -545,33 +545,57 @@ export default function PlayerBookingWizardPage() {
                 })}
               </div>
 
-              {/* Available Slots for Active Court */}
+              {/* Schedule Slots for Active Court */}
               <div className={styles.slotsSectionTitle}>
-                Available Slots for {activeCourt?.name} on {selectedDate} ({selectedDuration} mins):
+                Schedule for {activeCourt?.name} on {selectedDate} ({selectedDuration} mins):
               </div>
 
               {courtSlots.length === 0 ? (
                 <div className={styles.noSlotsNotice}>
-                  No available {selectedDuration}-minute slots remaining on this court for the selected date. Try another court or duration block.
+                  No schedule slots found for this court on the selected date.
                 </div>
               ) : (
                 <div className={styles.slotsGrid}>
                   {courtSlots.map((slot) => {
                     const isSlotSelected = selectedSlot?.startTime === slot.startTime;
+                    const isAvail = slot.isAvailable !== false;
+                    const isOpenPlay = slot.status === 'open_play';
+                    const isPlaying = slot.status === 'playing';
+                    const isBooked = slot.status === 'booked';
+
                     return (
                       <button
                         type="button"
                         key={slot.startTime}
-                        data-sfx="pop"
+                        disabled={!isAvail}
+                        data-sfx={isAvail ? 'pop' : 'none'}
                         className={`${styles.slotBtn} ${
                           isSlotSelected ? styles.slotBtnSelected : ''
-                        }`}
+                        } ${!isAvail ? styles.slotBtnFaded : ''}`}
                         onClick={() => {
+                          if (!isAvail) return;
                           play('select');
                           setSelectedSlot(slot);
                         }}
                       >
-                        {formatTime(slot.startTime)}
+                        <span className={styles.slotTimeText}>
+                          {formatTime(slot.startTime)}
+                        </span>
+                        <span
+                          className={`${styles.slotStatusTag} ${
+                            isAvail
+                              ? styles.tagAvailable
+                              : isOpenPlay
+                              ? styles.tagOpenPlay
+                              : isPlaying
+                              ? styles.tagPlaying
+                              : styles.tagBooked
+                          }`}
+                        >
+                          {isAvail
+                            ? 'Available'
+                            : slot.statusLabel || (isBooked ? 'Booked' : 'Unavailable')}
+                        </span>
                       </button>
                     );
                   })}

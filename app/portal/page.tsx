@@ -48,7 +48,7 @@ interface CourtLiveStatus {
   hourlyRate: string;
   openingTime: string;
   closingTime: string;
-  currentState: 'AVAILABLE' | 'USING' | 'RESERVED' | 'BLOCKED' | 'CLOSED';
+  currentState: 'AVAILABLE' | 'USING' | 'BOOKED' | 'RESERVED' | 'BLOCKED' | 'CLOSED';
   currentSession: {
     bookingId?: string;
     leadPlayerName?: string;
@@ -87,10 +87,10 @@ export default function PlayerPortalPage() {
   const stageCourts: StageCourt[] = useMemo(() => {
     if (liveCourts.length === 0) {
       return [
-        { id: 'c1', name: 'Court 1', state: 'AVAILABLE', caption: 'Available' },
-        { id: 'c2', name: 'Court 2', state: 'USING', caption: 'In Session' },
-        { id: 'c3', name: 'Court 3', state: 'RESERVED', caption: 'Held' },
-        { id: 'c4', name: 'Court 4', state: 'BOOKED', caption: 'Booked' },
+        { id: 'c1', name: 'Court 1', state: 'AVAILABLE', caption: 'Open' },
+        { id: 'c2', name: 'Court 2', state: 'USING', caption: 'Playing' },
+        { id: 'c3', name: 'Court 3', state: 'AVAILABLE', caption: 'Open' },
+        { id: 'c4', name: 'Court 4', state: 'BOOKED', caption: 'Fully Booked' },
       ];
     }
     return liveCourts.map((c) => ({
@@ -294,7 +294,6 @@ export default function PlayerPortalPage() {
           </Link>
           <div className={styles.userActions}>
             <span className={styles.userEmail}>{user?.email}</span>
-            <SoundToggle />
             <Button id="btn-portal-signout" variant="ghost" size="sm" onClick={handleSignOut}>
               Sign Out
             </Button>
@@ -308,7 +307,7 @@ export default function PlayerPortalPage() {
           <div className={styles.heroLeft}>
             <h1 className={styles.heroTitle}>Welcome back, {user?.user_metadata?.full_name || 'Player'}</h1>
             <p className={styles.heroSubtitle}>
-              Reserve courts with flexible 30/60/90m duration blocks, inspect equipment rentals, and track live court availability in real-time 3D.
+              Reserve courts with flexible duration blocks, inspect equipment rentals, and track live court availability.
             </p>
           </div>
           <div>
@@ -325,10 +324,7 @@ export default function PlayerPortalPage() {
           <div className={styles.liveSectionHeader}>
             <span className={styles.liveSectionTitle}>
               <span className={styles.pulseDot} />
-              Live Facility Court States (Real-Time 3D)
-            </span>
-            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
-              Updated automatically via Supabase Realtime
+              Court Availability
             </span>
           </div>
 
@@ -338,8 +334,8 @@ export default function PlayerPortalPage() {
               courts={stageCourts}
               selectedCourtId={selected3dCourtId}
               onSelectCourt={(id) => setSelected3dCourtId(id)}
-              title="Live Arena · 3D"
-              subtitle="Watch live rallies, active matches, and immediate openings in 3D cartoon courts"
+              title="Live Court View"
+              subtitle="Check court availability and live play in real-time"
             />
           </div>
 
@@ -347,7 +343,8 @@ export default function PlayerPortalPage() {
             {liveCourts.map((court) => {
               const isUsing = court.currentState === 'USING';
               const isBlocked = court.currentState === 'BLOCKED';
-              const isReserved = court.currentState === 'RESERVED';
+              const isBooked = court.currentState === 'BOOKED';
+              const isClosed = court.currentState === 'CLOSED';
               const isSelected3D = selected3dCourtId === court.courtId;
 
               return (
@@ -366,25 +363,25 @@ export default function PlayerPortalPage() {
                     <Badge
                       label={
                         isUsing
-                          ? 'USING · In Session'
+                          ? 'PLAYING'
                           : isBlocked
                           ? 'BLOCKED'
-                          : isReserved
-                          ? 'RESERVED'
-                          : court.currentState === 'AVAILABLE'
-                          ? 'AVAILABLE'
-                          : 'CLOSED'
+                          : isBooked
+                          ? 'FULLY BOOKED'
+                          : isClosed
+                          ? 'CLOSED'
+                          : 'OPEN'
                       }
                       status={
                         isUsing
                           ? 'USING'
                           : isBlocked
                           ? 'BLOCKED'
-                          : isReserved
-                          ? 'RESERVED'
-                          : court.currentState === 'AVAILABLE'
-                          ? 'AVAILABLE'
-                          : 'CLOSED'
+                          : isBooked
+                          ? 'BOOKED'
+                          : isClosed
+                          ? 'CLOSED'
+                          : 'AVAILABLE'
                       }
                     />
                   </div>
@@ -397,7 +394,7 @@ export default function PlayerPortalPage() {
                     <div className={styles.courtStatusSession}>
                       {isUsing && (
                         <span>
-                          🎾 In play: {court.currentSession.leadPlayerName} (until {formatTime(court.currentSession.endTime!)})
+                          🎾 Playing: {court.currentSession.leadPlayerName} (until {formatTime(court.currentSession.endTime!)})
                         </span>
                       )}
                       {isBlocked && (
@@ -405,17 +402,17 @@ export default function PlayerPortalPage() {
                           🛠️ {court.currentSession.reason || 'Maintenance Block'}
                         </span>
                       )}
-                      {isReserved && (
-                        <span>
-                          ⏳ Held for {court.currentSession.leadPlayerName} (Awaiting Pay)
-                        </span>
-                      )}
                     </div>
                   )}
 
-                  {!court.currentSession && court.currentState === 'AVAILABLE' && (
+                  {!court.currentSession && !isBooked && !isClosed && (
                     <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-brand-accent)' }}>
-                      ✓ Open for immediate booking
+                      ✓ Open for booking
+                    </div>
+                  )}
+                  {isBooked && (
+                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-coral-500)' }}>
+                      All time slots booked for this date
                     </div>
                   )}
                 </div>

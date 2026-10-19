@@ -311,7 +311,7 @@ export default function PosPage() {
         const tendered = parseFloat(cashTendered);
         if (isNaN(tendered) || tendered < cartSubtotal) {
           throw new Error(
-            `Cash tendered ($${tendered || 0}) must be at least the total amount ($${cartSubtotal.toFixed(2)}).`
+            `Cash tendered ($₱${tendered || 0}) must be at least the total amount ($${cartSubtotal.toFixed(2)}).`
           );
         }
       } else if (paymentMethod === 'EWALLET') {
@@ -604,7 +604,7 @@ export default function PosPage() {
                       <div className={styles.productName}>{p.name}</div>
 
                       <div className={styles.productBottomRow}>
-                        <div className={styles.priceTag}>${parseFloat(p.price).toFixed(2)}</div>
+                        <div className={styles.priceTag}>₱${parseFloat(p.price).toFixed(2)}</div>
                         <div className={styles.stockBadge}>
                           {isOutOfStock ? (
                             <span className={styles.stockOut}>Out of Stock</span>
@@ -788,7 +788,7 @@ export default function PosPage() {
                       <div className={styles.cartItemInfo}>
                         <div className={styles.cartItemName}>{item.product.name}</div>
                         <div className={styles.cartItemMeta}>
-                          ${parseFloat(item.product.price).toFixed(2)} each
+                          ₱${parseFloat(item.product.price).toFixed(2)} each
                         </div>
                       </div>
 
@@ -812,7 +812,7 @@ export default function PosPage() {
                         </button>
                       </div>
 
-                      <div className={styles.cartItemPrice}>${lineTotal}</div>
+                      <div className={styles.cartItemPrice}>₱${lineTotal}</div>
 
                       <button
                         type="button"
@@ -876,16 +876,16 @@ export default function PosPage() {
               </div>
               <div className={styles.totalRow}>
                 <span>Subtotal:</span>
-                <span>${cartSubtotal.toFixed(2)}</span>
+                <span>₱${cartSubtotal.toFixed(2)}</span>
               </div>
               <div className={styles.totalRow}>
                 <span>Facility Sales Tax (Included):</span>
-                <span>$0.00</span>
+                <span>₱0.00</span>
               </div>
               <div className={styles.grandTotalRow}>
                 <span>TOTAL DUE:</span>
                 <span className={styles.grandTotalAmount}>
-                  ${cartSubtotal.toFixed(2)}
+                  ₱${cartSubtotal.toFixed(2)}
                 </span>
               </div>
             </div>
@@ -1029,7 +1029,7 @@ export default function PosPage() {
                 <div>
                   <h2 className={adminStyles.modalTitle}>Counter Checkout</h2>
                   <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
-                    Total Amount Due: <strong style={{ color: 'var(--color-brand-400)' }}>${cartSubtotal.toFixed(2)}</strong>
+                    Total Amount Due: <strong style={{ color: 'var(--color-brand-400)' }}>₱${cartSubtotal.toFixed(2)}</strong>
                   </span>
                 </div>
                 <button
@@ -1098,9 +1098,9 @@ export default function PosPage() {
                       <div style={{ display: 'flex', gap: '6px' }}>
                         {[
                           { label: `Exact ($${cartSubtotal.toFixed(2)})`, val: cartSubtotal.toFixed(2) },
-                          { label: '$20', val: '20' },
-                          { label: '$50', val: '50' },
-                          { label: '$100', val: '100' },
+                          { label: '₱100', val: '100' },
+                          { label: '₱500', val: '500' },
+                          { label: '₱1000', val: '1000' },
                         ].map((btn) => (
                           <button
                             key={btn.label}
@@ -1127,7 +1127,7 @@ export default function PosPage() {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)', alignItems: 'center' }}>
                       <Input
                         id="input-cash-tendered-modal"
-                        label="Cash Tendered ($)"
+                        label="Cash Tendered (₱)"
                         type="number"
                         step="0.01"
                         min="0"
@@ -1139,7 +1139,7 @@ export default function PosPage() {
                       <div style={{ background: 'var(--color-bg-surface)', padding: '10px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', textAlign: 'right' }}>
                         <span style={{ fontSize: '10px', color: 'var(--color-text-muted)', display: 'block' }}>CHANGE DUE</span>
                         <strong style={{ fontSize: 'var(--text-lg)', color: changeDueDisplay >= 0 ? 'var(--color-brand-400)' : 'var(--color-text-muted)' }}>
-                          ${changeDueDisplay.toFixed(2)}
+                          ₱${changeDueDisplay.toFixed(2)}
                         </strong>
                       </div>
                     </div>
@@ -1157,7 +1157,7 @@ export default function PosPage() {
                         <strong style={{ color: 'var(--ink-blue)', display: 'block' }}>PicklePunto Pay (GCash / Maya)</strong>
                         <span style={{ color: 'var(--color-text-secondary)' }}>Mobile / Merchant: +1 (555) 742-5537</span>
                         <span style={{ display: 'block', color: 'var(--color-text-muted)', fontSize: '10px' }}>
-                          Amount: ${cartSubtotal.toFixed(2)}
+                          Amount: ₱${cartSubtotal.toFixed(2)}
                         </span>
                       </div>
                     </div>
@@ -1242,8 +1242,8 @@ export default function PosPage() {
                       <tr key={i.id}>
                         <td>{i.name}</td>
                         <td style={{ textAlign: 'center' }}>{i.quantity}</td>
-                        <td style={{ textAlign: 'right' }}>${i.unitPrice}</td>
-                        <td style={{ textAlign: 'right' }}>${i.lineTotal}</td>
+                        <td style={{ textAlign: 'right' }}>₱${i.unitPrice}</td>
+                        <td style={{ textAlign: 'right' }}>₱${i.lineTotal}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1253,7 +1253,7 @@ export default function PosPage() {
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 900, fontSize: '14px', margin: '4px 0' }}>
                   <span>TOTAL DUE:</span>
-                  <span>${activeReceipt.totalAmount}</span>
+                  <span>₱${activeReceipt.totalAmount}</span>
                 </div>
 
                 <div style={{ fontSize: '11px', marginTop: '6px' }}>
@@ -1264,13 +1264,13 @@ export default function PosPage() {
                   {activeReceipt.cashTendered && (
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span>Cash Tendered:</span>
-                      <span>${activeReceipt.cashTendered}</span>
+                      <span>₱${activeReceipt.cashTendered}</span>
                     </div>
                   )}
                   {activeReceipt.changeDue && (
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>
                       <span>Change Due:</span>
-                      <span>${activeReceipt.changeDue}</span>
+                      <span>₱${activeReceipt.changeDue}</span>
                     </div>
                   )}
                   {activeReceipt.paymentReference && (
