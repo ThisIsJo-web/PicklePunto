@@ -8,19 +8,33 @@ import Badge from '@/components/ui/Badge';
 import { CourtDto } from '@/types';
 import { formatDate, formatTime, formatTimeString } from '@/lib/utils/date';
 import { useRealtimeSchedule } from '@/lib/hooks/useRealtimeSchedule';
-import { addDays, subDays, format } from 'date-fns';
+import { addDays, subDays, format, parseISO } from 'date-fns';
 import styles from './schedule.module.css';
 import pageStyles from '../admin.module.css';
 
-// 30-minute intervals from 06:00 to 22:00
+// 30-minute intervals covering complete operating cycle:
+// 05:00 to 02:00 next day (Active Play Hours) + 02:00 to 05:00 (Facility Closed)
 const TIME_SLOTS = [
-  '06:00', '06:30', '07:00', '07:30', '08:00', '08:30',
-  '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
-  '12:00', '12:30', '13:00', '13:30', '14:00', '14:30',
-  '15:00', '15:30', '16:00', '16:30', '17:00', '17:30',
-  '18:00', '18:30', '19:00', '19:30', '20:00', '20:30',
-  '21:00', '21:30', '22:00',
+  '05:00', '05:30', '06:00', '06:30', '07:00', '07:30',
+  '08:00', '08:30', '09:00', '09:30', '10:00', '10:30',
+  '11:00', '11:30', '12:00', '12:30', '13:00', '13:30',
+  '14:00', '14:30', '15:00', '15:30', '16:00', '16:30',
+  '17:00', '17:30', '18:00', '18:30', '19:00', '19:30',
+  '20:00', '20:30', '21:00', '21:30', '22:00', '22:30',
+  '23:00', '23:30', '00:00', '00:30', '01:00', '01:30',
+  '02:00', '02:30', '03:00', '03:30', '04:00', '04:30',
 ];
+
+function getSlotDateTime(dateStr: string, timeSlot: string): Date {
+  const base = parseISO(dateStr);
+  if (timeSlot < '05:00') {
+    // Hours past midnight (00:00 to 04:30) belong to the next calendar morning
+    const next = addDays(base, 1);
+    const nextStr = format(next, 'yyyy-MM-dd');
+    return new Date(`${nextStr}T${timeSlot}:00`);
+  }
+  return new Date(`${dateStr}T${timeSlot}:00`);
+}
 
 type GridCell =
   | { kind: 'skip' }
@@ -153,11 +167,14 @@ export default function AdminSchedulePage() {
   }
 
   function isCourtOpen(court: CourtDto, timeSlot: string): boolean {
+    if (court.closingTime < court.openingTime) {
+      return timeSlot >= court.openingTime || timeSlot < court.closingTime;
+    }
     return timeSlot >= court.openingTime && timeSlot < court.closingTime;
   }
 
   function getBookingAtSlot(courtId: string, timeSlot: string) {
-    const slotTarget = new Date(`${dateStr}T${timeSlot}:00`);
+    const slotTarget = getSlotDateTime(dateStr, timeSlot);
     return bookings.find((b) => {
       if (b.courtId !== courtId || b.status === 'CANCELLED' || b.status === 'NO_SHOW') return false;
       const bStart = new Date(b.startTime);
@@ -167,7 +184,7 @@ export default function AdminSchedulePage() {
   }
 
   function getBlockAtSlot(courtId: string, timeSlot: string) {
-    const slotTarget = new Date(`${dateStr}T${timeSlot}:00`);
+    const slotTarget = getSlotDateTime(dateStr, timeSlot);
     return blocks.find((blk) => {
       if (blk.courtId !== courtId) return false;
       const blkStart = new Date(blk.blockedFrom);
@@ -215,7 +232,7 @@ export default function AdminSchedulePage() {
   const isToday = dateStr === format(new Date(nowTick), 'yyyy-MM-dd');
   const nowSlotIndex = isToday
     ? TIME_SLOTS.findIndex((s) => {
-        const st = new Date(`${dateStr}T${s}:00`).getTime();
+        const st = getSlotDateTime(dateStr, s).getTime();
         return st <= nowTick && nowTick < st + 30 * 60000;
       })
     : -1;
@@ -346,7 +363,12 @@ export default function AdminSchedulePage() {
       .reduce((sum, b) => sum + (parseFloat(b.totalAmount) || 0), 0),
   };
   const openMinutes = courts.reduce(
-    (sum, c) => sum + Math.max(0, toMinutes(c.closingTime) - toMinutes(c.openingTime)),
+    (sum, c) => {
+      const open = toMinutes(c.openingTime);
+      let close = toMinutes(c.closingTime);
+      if (close < open) close += 24 * 60;
+      return sum + Math.max(0, close - open);
+    },
     0
   );
   const bookedMinutes = activeBookings.reduce((sum, b) => sum + (b.durationMinutes || 0), 0);
@@ -354,7 +376,7 @@ export default function AdminSchedulePage() {
 
   // Interactive slot click
   function handleSlotClick(courtId: string, timeSlot: string) {
-    const slotTarget = new Date(`${dateStr}T${timeSlot}:00`);
+    const slotTarget = getSlotDateTime(dateStr, timeSlot);
     if (slotTarget.getTime() <= Date.now()) {
       showToast('Cannot reserve a slot in the past. Please pick an upcoming slot or use Walk-in.');
       return;
@@ -502,7 +524,7 @@ export default function AdminSchedulePage() {
     setBookingError(null);
 
     try {
-      const slotTarget = new Date(`${dateStr}T${bookStartTime}:00`);
+      const slotTarget = getSlotDateTime(dateStr, bookStartTime);
 
       if (!isWalkInMode && slotTarget.getTime() <= Date.now()) {
         throw new Error('Cannot create an advance reservation in the past. Please select an upcoming slot.');
@@ -593,8 +615,8 @@ export default function AdminSchedulePage() {
     setBlockError(null);
 
     try {
-      const startIso = new Date(`${dateStr}T${blockStartTime}:00`).toISOString();
-      const endIso = new Date(`${dateStr}T${blockEndTime}:00`).toISOString();
+      const startIso = getSlotDateTime(dateStr, blockStartTime).toISOString();
+      const endIso = getSlotDateTime(dateStr, blockEndTime).toISOString();
 
       const res = await fetch('/api/court-blocks', {
         method: 'POST',
@@ -945,6 +967,7 @@ export default function AdminSchedulePage() {
                       </div>
                       <span className={styles.courtHoursTag}>
                         {formatTimeString(court.openingTime)} – {formatTimeString(court.closingTime)}
+                        {court.closingTime < court.openingTime ? ' (+1d)' : ''}
                       </span>
                     </th>
                   ))}
@@ -966,6 +989,11 @@ export default function AdminSchedulePage() {
                         ) : (
                           <span className={styles.timeCellHalf}>:{slot.slice(3)}</span>
                         )}
+                        {slot < '05:00' && (
+                          <span style={{ fontSize: '9px', opacity: 0.65, display: 'block', fontWeight: 600 }}>
+                            {slot >= '02:00' ? 'Closed' : '+1d'}
+                          </span>
+                        )}
                         {isNow && <span className={styles.nowTag}>NOW</span>}
                       </td>
 
@@ -980,7 +1008,18 @@ export default function AdminSchedulePage() {
                               rowSpan={cell.span}
                               className={`${styles.slotCell} ${styles.slotClosed}`}
                             >
-                              <div className={styles.closedInner}>{cell.span >= 2 ? 'Closed' : ''}</div>
+                              <div className={styles.closedInner}>
+                                {cell.span >= 2 ? (
+                                  <>
+                                    <strong>Closed</strong>
+                                    <span style={{ fontSize: '10px', opacity: 0.85, display: 'block', marginTop: '2px' }}>
+                                      Reopens 5:00 AM
+                                    </span>
+                                  </>
+                                ) : (
+                                  'Closed'
+                                )}
+                              </div>
                             </td>
                           );
                         }
@@ -1068,7 +1107,7 @@ export default function AdminSchedulePage() {
                         }
 
                         // Free slot
-                        const slotDate = new Date(`${dateStr}T${slot}:00`);
+                        const slotDate = getSlotDateTime(dateStr, slot);
                         const slotEnd = new Date(slotDate.getTime() + 30 * 60000);
                         const isConcluded = slotEnd.getTime() <= nowTick;
                         const isOngoing = slotDate.getTime() <= nowTick && !isConcluded;

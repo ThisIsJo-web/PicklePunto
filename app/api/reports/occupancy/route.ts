@@ -32,9 +32,9 @@ export async function GET(request: Request) {
       }),
     ]);
 
-    // Hourly histogram (6:00 to 22:00)
+    // Hourly histogram covering full 24h cycle
     const hourlyHistogram: { hour: number; label: string; count: number }[] = [];
-    for (let h = 6; h <= 22; h++) {
+    for (let h = 0; h < 24; h++) {
       const label = `${h % 12 || 12}:00 ${h >= 12 ? 'PM' : 'AM'}`;
       hourlyHistogram.push({ hour: h, label, count: 0 });
     }
@@ -56,7 +56,8 @@ export async function GET(request: Request) {
     for (const c of courts) {
       const [openH, openM] = c.openingTime.split(':').map(Number);
       const [closeH, closeM] = c.closingTime.split(':').map(Number);
-      const dayMinutes = (closeH * 60 + closeM) - (openH * 60 + openM);
+      let dayMinutes = (closeH * 60 + closeM) - (openH * 60 + openM);
+      if (dayMinutes < 0) dayMinutes += 24 * 60;
       const totalCapacity = Math.max(0, dayMinutes * rangeDays);
 
       courtStats[c.id] = {

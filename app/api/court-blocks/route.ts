@@ -16,7 +16,7 @@ export async function GET(request: Request) {
       const localDayStart = new Date(`${dateParam}T00:00:00`);
       const localDayEnd = new Date(`${dateParam}T23:59:59.999`);
       const queryFrom = new Date(localDayStart.getTime() - 14 * 3600 * 1000);
-      const queryTo = new Date(localDayEnd.getTime() + 14 * 3600 * 1000);
+      const queryTo = new Date(localDayEnd.getTime() + 28 * 3600 * 1000);
       dateFilter = {
         blockedFrom: { lte: queryTo },
         blockedTo: { gte: queryFrom },

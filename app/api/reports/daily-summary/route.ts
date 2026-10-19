@@ -74,7 +74,8 @@ export async function GET(request: Request) {
     for (const c of courts) {
       const [openH, openM] = c.openingTime.split(':').map(Number);
       const [closeH, closeM] = c.closingTime.split(':').map(Number);
-      const courtMinutes = (closeH * 60 + closeM) - (openH * 60 + openM);
+      let courtMinutes = (closeH * 60 + closeM) - (openH * 60 + openM);
+      if (courtMinutes < 0) courtMinutes += 24 * 60;
       if (courtMinutes > 0) {
         totalCapacityMinutes += courtMinutes;
       }
@@ -89,9 +90,9 @@ export async function GET(request: Request) {
       where: { status: 'OPEN' },
     });
 
-    // 5. Peak Hours distribution
+    // 5. Peak Hours distribution across all hours
     const hourHistogram: Record<number, number> = {};
-    for (let h = 6; h <= 22; h++) hourHistogram[h] = 0;
+    for (let h = 0; h < 24; h++) hourHistogram[h] = 0;
 
     for (const b of bookings) {
       const startH = new Date(b.startTime).getHours();

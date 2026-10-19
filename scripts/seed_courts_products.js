@@ -9,8 +9,8 @@ async function run() {
       surfaceType: 'Pro Cushion Acrylic',
       isActive: true,
       hourlyRate: 40.0,
-      openingTime: '06:00',
-      closingTime: '22:00',
+      openingTime: '05:00',
+      closingTime: '02:00',
     },
     {
       id: '10000000-0000-0000-0000-000000000002',
@@ -18,8 +18,8 @@ async function run() {
       surfaceType: 'Hardcourt Acrylic',
       isActive: true,
       hourlyRate: 30.0,
-      openingTime: '07:00',
-      closingTime: '21:00',
+      openingTime: '05:00',
+      closingTime: '02:00',
     },
     {
       id: '10000000-0000-0000-0000-000000000003',
@@ -27,8 +27,8 @@ async function run() {
       surfaceType: 'Hardcourt Acrylic',
       isActive: true,
       hourlyRate: 30.0,
-      openingTime: '07:00',
-      closingTime: '21:00',
+      openingTime: '05:00',
+      closingTime: '02:00',
     },
     {
       id: '10000000-0000-0000-0000-000000000004',
@@ -36,8 +36,8 @@ async function run() {
       surfaceType: 'Modular Turf',
       isActive: true,
       hourlyRate: 25.0,
-      openingTime: '08:00',
-      closingTime: '20:00',
+      openingTime: '05:00',
+      closingTime: '02:00',
     },
   ];
 

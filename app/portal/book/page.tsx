@@ -538,7 +538,7 @@ export default function PlayerBookingWizardPage() {
                         </span>
                       </div>
                       <div style={{ fontSize: '0.75rem', opacity: 0.85 }}>
-                        Hours: {court.openingTime} – {court.closingTime}
+                        Hours: 5:00 AM – 2:00 AM (Next Day)
                       </div>
                     </button>
                   );
@@ -562,6 +562,11 @@ export default function PlayerBookingWizardPage() {
                     const isOpenPlay = slot.status === 'open_play';
                     const isPlaying = slot.status === 'playing';
                     const isBooked = slot.status === 'booked';
+                    const slotD = new Date(slot.startTime);
+                    const slotY = slotD.getFullYear();
+                    const slotM = String(slotD.getMonth() + 1).padStart(2, '0');
+                    const slotDay = String(slotD.getDate()).padStart(2, '0');
+                    const isNextCalendarDay = `${slotY}-${slotM}-${slotDay}` !== selectedDate;
 
                     return (
                       <button
@@ -580,6 +585,11 @@ export default function PlayerBookingWizardPage() {
                       >
                         <span className={styles.slotTimeText}>
                           {formatTime(slot.startTime)}
+                          {isNextCalendarDay && (
+                            <span style={{ fontSize: '10px', opacity: 0.75, marginLeft: '4px', fontWeight: 700 }}>
+                              +1d
+                            </span>
+                          )}
                         </span>
                         <span
                           className={`${styles.slotStatusTag} ${

@@ -17,24 +17,30 @@ export async function GET(request: Request) {
     // ── Rule: Auto-void physical on-site no-shows (30-minute grace period from reservation start time) ──
     const now = new Date();
     const thirtyMinutesPastStart = new Date(now.getTime() - 30 * 60 * 1000);
-    await prisma.booking.updateMany({
-      where: {
-        status: { in: ['PENDING', 'AWAITING_PAYMENT'] },
-        startTime: { lte: thirtyMinutesPastStart },
-      },
-      data: {
-        status: 'NO_SHOW',
-        notes: 'Voided: 30-minute physical on-site no-show grace period expired',
-      },
-    }).catch((e) => console.warn('Auto-void sweep error:', e));
+    prisma.booking
+      .updateMany({
+        where: {
+          status: { in: ['PENDING', 'AWAITING_PAYMENT'] },
+          startTime: { lte: thirtyMinutesPastStart },
+        },
+        data: {
+          status: 'NO_SHOW',
+          notes: 'Voided: 30-minute physical on-site no-show grace period expired',
+        },
+      })
+      .catch((e) => console.warn('Auto-void sweep error:', e));
 
     let dateFilter = {};
+    let nextDateStr = '';
     if (dateParam) {
-      // Create local start & end of the requested calendar date with 14h timezone buffer
+      // Operating day: dateParam 05:00 through next day 02:00 AM
       const localDayStart = new Date(`${dateParam}T00:00:00`);
       const localDayEnd = new Date(`${dateParam}T23:59:59.999`);
+      const nextDate = new Date(localDayStart.getTime() + 24 * 3600 * 1000);
+      nextDateStr = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}-${String(nextDate.getDate()).padStart(2, '0')}`;
+
       const queryFrom = new Date(localDayStart.getTime() - 14 * 3600 * 1000);
-      const queryTo = new Date(localDayEnd.getTime() + 14 * 3600 * 1000);
+      const queryTo = new Date(localDayEnd.getTime() + 28 * 3600 * 1000);
       dateFilter = {
         startTime: { gte: queryFrom, lte: queryTo },
       };
@@ -63,14 +69,24 @@ export async function GET(request: Request) {
       orderBy: { startTime: 'asc' },
     });
 
-    // If dateParam was passed, filter bookings whose local date matches dateParam
+    // If dateParam was passed, filter bookings belonging to operating day:
+    // dateParam (05:00 - 23:59) OR nextDateStr (00:00 - 04:59 late night)
     const bookings = dateParam
       ? rawBookings.filter((b) => {
           const d = new Date(b.startTime);
           const y = d.getFullYear();
           const m = String(d.getMonth() + 1).padStart(2, '0');
           const day = String(d.getDate()).padStart(2, '0');
-          return `${y}-${m}-${day}` === dateParam;
+          const bookingDateStr = `${y}-${m}-${day}`;
+          const hours = d.getHours();
+
+          if (bookingDateStr === dateParam) {
+            return true;
+          }
+          if (bookingDateStr === nextDateStr && hours < 5) {
+            return true;
+          }
+          return false;
         })
       : rawBookings;
 

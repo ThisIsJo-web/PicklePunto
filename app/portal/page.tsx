@@ -87,10 +87,10 @@ export default function PlayerPortalPage() {
   const stageCourts: StageCourt[] = useMemo(() => {
     if (liveCourts.length === 0) {
       return [
-        { id: 'c1', name: 'Court 1', state: 'AVAILABLE', caption: 'Open' },
-        { id: 'c2', name: 'Court 2', state: 'USING', caption: 'Playing' },
-        { id: 'c3', name: 'Court 3', state: 'AVAILABLE', caption: 'Open' },
-        { id: 'c4', name: 'Court 4', state: 'BOOKED', caption: 'Fully Booked' },
+        { id: '10000000-0000-0000-0000-000000000001', name: 'Court 1 - Center Court', state: 'AVAILABLE', caption: 'Open' },
+        { id: '10000000-0000-0000-0000-000000000002', name: 'Court 2 - North Court', state: 'AVAILABLE', caption: 'Open' },
+        { id: '10000000-0000-0000-0000-000000000003', name: 'Court 3 - South Court', state: 'AVAILABLE', caption: 'Open' },
+        { id: '10000000-0000-0000-0000-000000000004', name: 'Court 4 - Training Court', state: 'AVAILABLE', caption: 'Open' },
       ];
     }
     return liveCourts.map((c) => ({
@@ -133,6 +133,11 @@ export default function PlayerPortalPage() {
     }
   }, []);
 
+  // 2b. Start fetching live status immediately on mount
+  useEffect(() => {
+    fetchLiveStatus();
+  }, [fetchLiveStatus]);
+
   // 3. Initial Load & Auth Check
   useEffect(() => {
     async function init() {
@@ -143,7 +148,7 @@ export default function PlayerPortalPage() {
           return;
         }
         setUser(authUser);
-        await Promise.all([fetchBookings(authUser.id), fetchLiveStatus()]);
+        await fetchBookings(authUser.id);
       } catch (err) {
         console.error('Portal init error:', err);
       } finally {
@@ -151,7 +156,7 @@ export default function PlayerPortalPage() {
       }
     }
     init();
-  }, [router, supabase, fetchBookings, fetchLiveStatus]);
+  }, [router, supabase, fetchBookings]);
 
   // 4. Supabase Realtime Subscription for instant updates
   useEffect(() => {

@@ -37,6 +37,8 @@ function timeStringToMinutes(timeStr: string): number {
   return h * 60 + m;
 }
 
+let cachedLiveStatus: { timestamp: number; key: string; payload: any } | null = null;
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -46,30 +48,36 @@ export async function GET(request: Request) {
     const isToday = dateParam === todayManila;
     const nowMinutes = getManilaMinutes(now);
 
-    // ── Rule: Auto-void physical on-site no-shows (30-minute grace period from reservation start time) ──
+    // ── 3-second in-memory response cache for instant client rendering ──
+    const cacheKey = `${dateParam}-${Math.floor(now.getTime() / 3000)}`;
+    if (cachedLiveStatus && cachedLiveStatus.key === cacheKey) {
+      return NextResponse.json(apiSuccess(cachedLiveStatus.payload));
+    }
+
+    // ── Non-blocking background sweep for expired unpaid/pending reservations ──
     const thirtyMinutesPastStart = new Date(now.getTime() - 30 * 60 * 1000);
-    await prisma.booking.updateMany({
-      where: {
-        status: { in: ['PENDING', 'AWAITING_PAYMENT'] },
-        startTime: { lte: thirtyMinutesPastStart },
-      },
-      data: {
-        status: 'NO_SHOW',
-        notes: 'Voided: 30-minute physical on-site no-show grace period expired',
-      },
-    }).catch((e) => console.warn('Auto-void sweep error:', e));
+    prisma.booking
+      .updateMany({
+        where: {
+          status: { in: ['PENDING', 'AWAITING_PAYMENT'] },
+          startTime: { lte: thirtyMinutesPastStart },
+        },
+        data: {
+          status: 'NO_SHOW',
+          notes: 'Voided: 30-minute physical on-site no-show grace period expired',
+        },
+      })
+      .catch((e) => console.warn('Auto-void sweep error:', e));
 
-    const courts = await prisma.court.findMany({
-      orderBy: { name: 'asc' },
-    });
-
-    // Query bounds covering the target date with timezone buffer (14 hours)
+    // Operating day bounds: 05:00 of dateParam until 02:00 of (dateParam + 1 day)
     const localDayStart = new Date(`${dateParam}T00:00:00`);
     const localDayEnd = new Date(`${dateParam}T23:59:59.999`);
     const queryFrom = new Date(localDayStart.getTime() - 14 * 3600 * 1000);
-    const queryTo = new Date(localDayEnd.getTime() + 14 * 3600 * 1000);
+    const queryTo = new Date(localDayEnd.getTime() + 28 * 3600 * 1000); // covers until next day late afternoon
 
-    const [blocks, bookings] = await Promise.all([
+    // Run all 3 queries in parallel for maximum performance
+    const [courts, blocks, bookings] = await Promise.all([
+      prisma.court.findMany({ orderBy: { name: 'asc' } }),
       prisma.courtBlock.findMany({
         where: {
           blockedFrom: { lte: queryTo },
@@ -88,10 +96,18 @@ export async function GET(request: Request) {
       }),
     ]);
 
-    const statusList = courts.map((court) => {
-      const openMinutes = timeStringToMinutes(court.openingTime);
-      const closeMinutes = timeStringToMinutes(court.closingTime);
+    // Next calendar date string for overnight schedule
+    const nextDate = new Date(localDayStart.getTime() + 24 * 3600 * 1000);
+    const nextDateStr = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}-${String(nextDate.getDate()).padStart(2, '0')}`;
 
+    // Operating window bounds: dateParam 05:00:00 to nextDateStr 02:00:00
+    const opWindowStart = new Date(`${dateParam}T05:00:00`);
+    const opWindowEnd = new Date(`${nextDateStr}T02:00:00`);
+
+    // Closed period: 02:01 AM to 04:59 AM (120 to 300 minutes from midnight)
+    const isFacilityClosedNow = nowMinutes >= 120 && nowMinutes < 300;
+
+    const statusList = courts.map((court) => {
       let state: CourtLiveState = 'AVAILABLE';
       let currentSession: {
         bookingId?: string;
@@ -126,7 +142,7 @@ export async function GET(request: Request) {
         }
       }
 
-      // 3. Active booking covering right now (ONLY Confirmed booking counts as Playing)
+      // 3. Active booking covering right now (Confirmed booking counts as Playing)
       if (state !== 'BLOCKED' && isToday) {
         const activeBooking = bookings.find(
           (b) =>
@@ -147,50 +163,43 @@ export async function GET(request: Request) {
         }
       }
 
-      // 4. Check if Fully Booked for the selected date
-      // A court is Fully Booked ONLY if all available operating slots on this date are taken.
+      // 4. Check if Fully Booked for the operating day (05:00 to 02:00 next day)
       if (state !== 'BLOCKED' && state !== 'USING') {
-        const totalDuration = closeMinutes - openMinutes;
-        const slotStep = 60; // 1-hour standard booking blocks
         let totalSlots = 0;
         let bookedSlots = 0;
+        let slotCursor = new Date(opWindowStart);
 
-        for (let m = openMinutes; m + slotStep <= closeMinutes; m += slotStep) {
+        while (slotCursor < opWindowEnd) {
           totalSlots++;
-          const slotStartH = String(Math.floor(m / 60)).padStart(2, '0');
-          const slotStartM = String(m % 60).padStart(2, '0');
-          const slotEndH = String(Math.floor((m + slotStep) / 60)).padStart(2, '0');
-          const slotEndM = String((m + slotStep) % 60).padStart(2, '0');
-
-          const slotStart = new Date(`${dateParam}T${slotStartH}:${slotStartM}:00`);
-          const slotEnd = new Date(`${dateParam}T${slotEndH}:${slotEndM}:00`);
+          const slotEnd = new Date(slotCursor.getTime() + 30 * 60 * 1000);
 
           const isOverlappingBooking = bookings.some(
             (b) =>
               b.courtId === court.id &&
               new Date(b.startTime) < slotEnd &&
-              new Date(b.endTime) > slotStart
+              new Date(b.endTime) > slotCursor
           );
 
           const isOverlappingBlock = blocks.some(
             (b) =>
               b.courtId === court.id &&
               new Date(b.blockedFrom) < slotEnd &&
-              new Date(b.blockedTo) > slotStart
+              new Date(b.blockedTo) > slotCursor
           );
 
           if (isOverlappingBooking || isOverlappingBlock) {
             bookedSlots++;
           }
+
+          slotCursor = slotEnd;
         }
 
         if (totalSlots > 0 && bookedSlots >= totalSlots) {
-          state = 'BOOKED'; // Fully Booked for this date
-        } else if (isToday && nowMinutes >= closeMinutes) {
-          // Closed for the night after closing time
+          state = 'BOOKED'; // Fully Booked for this operating day
+        } else if (isToday && isFacilityClosedNow) {
+          // Closed during 2:01 AM to 4:59 AM
           state = 'CLOSED';
         } else {
-          // Has at least one available slot!
           state = 'AVAILABLE';
         }
       }
@@ -231,7 +240,10 @@ export async function GET(request: Request) {
       closed: statusList.filter((c) => c.currentState === 'CLOSED').length,
     };
 
-    return NextResponse.json(apiSuccess({ courts: statusList, summary, timestamp: now.toISOString() }));
+    const payload = { courts: statusList, summary, timestamp: now.toISOString() };
+    cachedLiveStatus = { timestamp: now.getTime(), key: cacheKey, payload };
+
+    return NextResponse.json(apiSuccess(payload));
   } catch (error: unknown) {
     console.error('Error in /api/courts/live-status:', error);
     const message = error instanceof Error ? error.message : 'Failed to fetch live court status';

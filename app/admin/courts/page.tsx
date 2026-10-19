@@ -22,8 +22,8 @@ export default function AdminCourtsPage() {
   const [name, setName] = useState('');
   const [surfaceType, setSurfaceType] = useState('Pro Cushion Acrylic');
   const [hourlyRate, setHourlyRate] = useState('40.00');
-  const [openingTime, setOpeningTime] = useState('06:00');
-  const [closingTime, setClosingTime] = useState('22:00');
+  const [openingTime, setOpeningTime] = useState('05:00');
+  const [closingTime, setClosingTime] = useState('02:00');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,8 +51,8 @@ export default function AdminCourtsPage() {
     setName('');
     setSurfaceType('Pro Cushion Acrylic');
     setHourlyRate('35.00');
-    setOpeningTime('07:00');
-    setClosingTime('21:00');
+    setOpeningTime('05:00');
+    setClosingTime('02:00');
     setError(null);
     setIsModalOpen(true);
   }

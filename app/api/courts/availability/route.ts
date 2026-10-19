@@ -32,19 +32,21 @@ export async function GET(request: Request) {
       });
     }
 
-    // ── Rule: Auto-void physical on-site no-shows (30-minute grace period from reservation start time) ──
+    // ── Non-blocking auto-void physical on-site no-shows (30-minute grace period) ──
     const now = new Date();
     const thirtyMinutesPastStart = new Date(now.getTime() - 30 * 60 * 1000);
-    await prisma.booking.updateMany({
-      where: {
-        status: { in: ['PENDING', 'AWAITING_PAYMENT'] },
-        startTime: { lte: thirtyMinutesPastStart },
-      },
-      data: {
-        status: 'NO_SHOW',
-        notes: 'Voided: 30-minute physical on-site no-show grace period expired',
-      },
-    }).catch((e) => console.warn('Auto-void sweep error in availability:', e));
+    prisma.booking
+      .updateMany({
+        where: {
+          status: { in: ['PENDING', 'AWAITING_PAYMENT'] },
+          startTime: { lte: thirtyMinutesPastStart },
+        },
+        data: {
+          status: 'NO_SHOW',
+          notes: 'Voided: 30-minute physical on-site no-show grace period expired',
+        },
+      })
+      .catch((e) => console.warn('Auto-void sweep error in availability:', e));
 
     const duration = [30, 60, 90].includes(durationParam) ? durationParam : 60;
 
@@ -57,32 +59,36 @@ export async function GET(request: Request) {
       orderBy: { name: 'asc' },
     });
 
-    // Timezone-safe local day bounds with buffer
+    // Timezone-safe local day bounds with buffer (covers through next day)
     const localDayStart = new Date(`${dateParam}T00:00:00`);
     const localDayEnd = new Date(`${dateParam}T23:59:59.999`);
     const queryFrom = new Date(localDayStart.getTime() - 14 * 3600 * 1000);
-    const queryTo = new Date(localDayEnd.getTime() + 14 * 3600 * 1000);
+    const queryTo = new Date(localDayEnd.getTime() + 28 * 3600 * 1000);
 
     // Fetch active bookings (PENDING, AWAITING_PAYMENT, CONFIRMED - excluding CANCELLED and NO_SHOW)
-    const bookings = await prisma.booking.findMany({
-      where: {
-        status: { in: ['PENDING', 'AWAITING_PAYMENT', 'CONFIRMED'] },
-        startTime: { gte: queryFrom, lte: queryTo },
-      },
-    });
-
-    // Fetch blocks for the target day
-    const blocks = await prisma.courtBlock.findMany({
-      where: {
-        blockedFrom: { lte: queryTo },
-        blockedTo: { gte: queryFrom },
-      },
-    });
+    const [bookings, blocks] = await Promise.all([
+      prisma.booking.findMany({
+        where: {
+          status: { in: ['PENDING', 'AWAITING_PAYMENT', 'CONFIRMED'] },
+          startTime: { gte: queryFrom, lte: queryTo },
+        },
+      }),
+      prisma.courtBlock.findMany({
+        where: {
+          blockedFrom: { lte: queryTo },
+          blockedTo: { gte: queryFrom },
+        },
+      }),
+    ]);
 
     // Compute slots per court
     const courtAvailability = courts.map((court) => {
       const courtOpen = timeStringToDate(dateParam, court.openingTime);
-      const courtClose = timeStringToDate(dateParam, court.closingTime);
+      let courtClose = timeStringToDate(dateParam, court.closingTime);
+      if (court.closingTime < court.openingTime) {
+        // Closes next calendar day (e.g. 02:00 AM next day)
+        courtClose = addMinutes(courtClose, 24 * 60);
+      }
 
       const allSlots: SlotDto[] = [];
 
