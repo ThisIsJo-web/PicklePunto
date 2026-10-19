@@ -166,7 +166,7 @@ export default function AdminCourtsPage() {
               }))}
               selectedCourtId={selectedCourtId || undefined}
               onSelectCourt={(id) => setSelectedCourtId(id)}
-              title="Interactive 3D Venue View"
+              title="Venue 3D View"
               subtitle="Explore real-time court layouts in 3D Arena or single Court Focus"
               initialMode="arena"
               height={340}

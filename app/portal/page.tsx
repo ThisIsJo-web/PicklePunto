@@ -338,7 +338,7 @@ export default function PlayerPortalPage() {
               courts={stageCourts}
               selectedCourtId={selected3dCourtId}
               onSelectCourt={(id) => setSelected3dCourtId(id)}
-              title="PicklePunto Live Arena (3D)"
+              title="Live Arena · 3D"
               subtitle="Watch live rallies, active matches, and immediate openings in 3D cartoon courts"
             />
           </div>

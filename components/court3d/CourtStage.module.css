@@ -285,24 +285,41 @@
 
 @media (max-width: 640px) {
   .topBar {
-    padding: var(--space-2) var(--space-3);
-    gap: 8px;
+    padding: 8px 10px;
+    gap: 6px;
+    flex-wrap: nowrap;
+    align-items: center;
+  }
+  .titleArea {
+    min-width: 0;
+    flex: 1;
+    gap: 6px;
   }
   .stageTitle {
-    font-size: 0.875rem;
+    font-size: 0.8rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 160px;
+  }
+  .badge3D {
+    font-size: 0.65rem;
+    padding: 2px 7px;
+    flex-shrink: 0;
   }
   .stageSubtitle {
     display: none;
   }
   .controlsArea {
+    flex-shrink: 0;
+    width: auto;
     gap: 4px;
-    width: 100%;
     justify-content: flex-end;
   }
   .pillBtn {
-    padding: 4px 8px;
-    font-size: 0.7rem;
-    gap: 4px;
+    padding: 4px 7px;
+    font-size: 0.68rem;
+    gap: 3px;
   }
   .courtChipsRow {
     padding: 8px var(--space-2);
@@ -311,7 +328,7 @@
   .courtChip {
     padding: 6px 10px;
     font-size: 0.72rem;
-    min-height: 36px;
+    min-height: 34px;
   }
   .dragHintText {
     display: none;

@@ -10,7 +10,6 @@ import { formatTime, formatDate } from '@/lib/utils/date';
 import CourtStage from '@/components/court3d/CourtStage';
 import type { StageCourt } from '@/components/court3d/types';
 import SoundToggle from '@/components/sfx/SoundToggle';
-import PlayerBottomNav from '@/components/layout/PlayerBottomNav';
 import { useSfx } from '@/components/sfx/SfxProvider';
 import styles from './book.module.css';
 
@@ -375,7 +374,6 @@ export default function PlayerBookingWizardPage() {
             </div>
           </div>
         </main>
-        <PlayerBottomNav />
       </div>
     );
   }
@@ -509,7 +507,7 @@ export default function PlayerBookingWizardPage() {
                     setSelectedCourtId(id);
                     setSelectedSlot(null);
                   }}
-                  title={`${activeCourt?.name || 'Pickleball Court'} (3D Cartoon View)`}
+                  title={activeCourt ? `${activeCourt.name.split(/ - |—/)[0]} · 3D View` : '3D Court View'}
                   subtitle="Rotate, inspect court lines, and tap court chips to switch"
                 />
               </div>
@@ -781,30 +779,38 @@ export default function PlayerBookingWizardPage() {
           </div>
         </form>
 
-        {/* Floating Mobile Booking Summary & Instant CTA */}
-        {selectedSlot && (
-          <aside className={styles.mobileFloatingBar} aria-label="Mobile booking action bar">
-            <div className={styles.mobileBarDetails}>
-              <div className={styles.mobileBarCourt}>{activeCourt?.name?.split(/[-—:]/)[0]?.trim() || 'Court'}</div>
-              <div className={styles.mobileBarSlot}>
-                {formatTime(selectedSlot.startTime)} ({selectedDuration}m) · <span className={styles.mobileBarPrice}>₱{totalAmount.toFixed(2)}</span>
-              </div>
+        {/* Floating Mobile Booking Bar - Always ready at bottom for player's thumb */}
+        <aside className={styles.mobileFloatingBar} aria-label="Mobile booking action bar">
+          <div className={styles.mobileBarDetails}>
+            <div className={styles.mobileBarCourt}>
+              {selectedSlot
+                ? (activeCourt?.name?.split(/[-—:]/)[0]?.trim() || 'Court')
+                : 'Pick a Time Slot'}
             </div>
-            <Button
-              type="button"
-              onClick={() => handleSubmitBooking()}
-              variant="primary"
-              size="md"
-              loading={submitting}
-              disabled={submitting}
-              data-sfx="whoosh"
-            >
-              Reserve Slot
-            </Button>
-          </aside>
-        )}
+            <div className={styles.mobileBarSlot}>
+              {selectedSlot ? (
+                <>
+                  {formatTime(selectedSlot.startTime)} ({selectedDuration}m) ·{' '}
+                  <span className={styles.mobileBarPrice}>₱{totalAmount.toFixed(2)}</span>
+                </>
+              ) : (
+                <span>Tap any time slot above</span>
+              )}
+            </div>
+          </div>
+          <Button
+            type="button"
+            onClick={() => handleSubmitBooking()}
+            variant="primary"
+            size="md"
+            loading={submitting}
+            disabled={!selectedSlot || submitting}
+            data-sfx="whoosh"
+          >
+            {selectedSlot ? 'Reserve Slot' : 'Select Slot'}
+          </Button>
+        </aside>
       </main>
-      <PlayerBottomNav />
     </div>
   );
 }

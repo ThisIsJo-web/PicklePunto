@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import SoundToggle from '@/components/sfx/SoundToggle';
+import { usePathname, useRouter } from 'next/navigation';
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
 import styles from './PlayerBottomNav.module.css';
 
 interface PlayerBottomNavProps {
@@ -12,9 +12,25 @@ interface PlayerBottomNavProps {
 
 export default function PlayerBottomNav({ onScrollTo3D, onSignOut }: PlayerBottomNavProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const supabase = createSupabaseBrowserClient();
+
+  // On the dedicated booking wizard page, hide bottom nav to avoid double bars
+  if (pathname.startsWith('/portal/book')) {
+    return null;
+  }
 
   const isPortal = pathname === '/portal';
-  const isBooking = pathname.startsWith('/portal/book');
+
+  const handleSignOut = async () => {
+    if (onSignOut) {
+      onSignOut();
+    } else {
+      await supabase.auth.signOut();
+      router.push('/login');
+      router.refresh();
+    }
+  };
 
   return (
     <nav className={styles.bottomNav} aria-label="Mobile Navigation">
@@ -57,22 +73,16 @@ export default function PlayerBottomNav({ onScrollTo3D, onSignOut }: PlayerBotto
         </Link>
       )}
 
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <SoundToggle />
-      </div>
-
-      {onSignOut && (
-        <button
-          type="button"
-          onClick={onSignOut}
-          className={styles.navBtn}
-          data-sfx="tap"
-          title="Sign Out"
-        >
-          <span className={styles.navIcon}>🚪</span>
-          <span className={styles.navLabel}>Exit</span>
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={handleSignOut}
+        className={styles.navBtn}
+        data-sfx="tap"
+        title="Sign Out"
+      >
+        <span className={styles.navIcon}>🚪</span>
+        <span className={styles.navLabel}>Exit</span>
+      </button>
     </nav>
   );
 }

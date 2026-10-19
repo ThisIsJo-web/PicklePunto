@@ -44,7 +44,7 @@ export default function GlobalError({
           boxShadow: '0 20px 40px rgba(0, 0, 0, 0.4)',
         }}
       >
-        <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>ðŸ“âš ï¸</div>
+        <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🏓 ⚠️</div>
         <h2
           style={{
             fontSize: '1.5rem',

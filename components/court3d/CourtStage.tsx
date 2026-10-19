@@ -38,13 +38,12 @@ function CameraRig({ targetPos, viewMode, orbitActive }: CameraProps) {
     controls.maxDistance = 36;
     controls.target.copy(lookTarget.current);
 
-    // Responsive touch controls:
-    // If orbitActive is enabled or on desktop, 1 finger/mouse rotates.
-    // Otherwise on touch devices, rotate is disabled by default so 1-finger swipes scroll the page naturally!
     const isTouch = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
-    controls.enableRotate = !isTouch || Boolean(orbitActive);
-    controls.enableZoom = true;
-    controls.enablePan = !isTouch || Boolean(orbitActive);
+    const allowInteraction = !isTouch || Boolean(orbitActive);
+    controls.enabled = allowInteraction;
+    controls.enableRotate = allowInteraction;
+    controls.enableZoom = allowInteraction;
+    controls.enablePan = allowInteraction;
 
     controlsRef.current = controls;
 
@@ -52,6 +51,18 @@ function CameraRig({ targetPos, viewMode, orbitActive }: CameraProps) {
       controls.dispose();
     };
   }, [camera, gl, orbitActive]);
+
+  // Keep controls enabled state synced with orbitActive changes
+  useEffect(() => {
+    if (controlsRef.current) {
+      const isTouch = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+      const allowInteraction = !isTouch || Boolean(orbitActive);
+      controlsRef.current.enabled = allowInteraction;
+      controlsRef.current.enableRotate = allowInteraction;
+      controlsRef.current.enableZoom = allowInteraction;
+      controlsRef.current.enablePan = allowInteraction;
+    }
+  }, [orbitActive]);
 
   // Compute desired camera offset depending on viewMode & screen aspect ratio
   useEffect(() => {
@@ -322,7 +333,7 @@ export default function CourtStage({
             }}
             title="Toggle touch orbit mode"
           >
-            <span>{touchOrbit ? '🔄 Orbit: 1-Finger' : '👆 2-Finger Orbit / Scroll'}</span>
+            <span>{touchOrbit ? '🔄 Orbit Mode (Tap to Lock)' : '👆 Tap to Rotate 3D Court'}</span>
           </button>
           <span className={styles.dragHintText}>Pinch to zoom · Tap chips to switch</span>
         </div>
@@ -333,6 +344,7 @@ export default function CourtStage({
         {courts.map((court) => {
           const isSelected = court.id === activeId;
           const label = STATE_LABEL[court.state as CourtVisualState] || court.state;
+          const shortName = court.name.split(/ - |—/)[0] || court.name;
 
           return (
             <button
@@ -344,7 +356,7 @@ export default function CourtStage({
               onClick={() => handleSelect(court.id)}
             >
               <span className={styles.chipStateDot} data-state={court.state} />
-              <span>{court.name}</span>
+              <span>{shortName}</span>
               <span style={{ opacity: 0.85, fontSize: '0.7rem' }}>
                 ({label})
               </span>

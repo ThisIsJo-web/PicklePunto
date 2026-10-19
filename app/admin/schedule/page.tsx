@@ -606,7 +606,7 @@ export default function AdminSchedulePage() {
                         const now = new Date();
                         const isConfirmed = booking.status === 'CONFIRMED';
                         const isUsing = isConfirmed && new Date(booking.startTime) <= now && new Date(booking.endTime) >= now;
-                        const isWalkIn = Boolean(booking.isWalkIn) || booking.notes?.includes('Walk-in') || booking.notes?.includes('ðŸš¶');
+                        const isWalkIn = Boolean(booking.isWalkIn) || booking.notes?.includes('Walk-in') || booking.notes?.includes('🚶');
 
                         return (
                           <td
@@ -624,10 +624,10 @@ export default function AdminSchedulePage() {
                                   ? styles.bookingConfirmed
                                   : styles.bookingAwaiting
                               }`}
-                              title={isWalkIn ? `ðŸš¶ Walk-in Session: ${booking.leadBookerName}` : `Click to view reservation & verify payment`}
+                              title={isWalkIn ? `🚶 Walk-in Session: ${booking.leadBookerName}` : `Click to view reservation & verify payment`}
                             >
                               <span className={styles.bookingBooker}>
-                                {isUsing ? 'ðŸŸ¢ ' : isWalkIn ? 'ðŸš¶ ' : '🎾 '}{booking.leadBookerName}
+                                {isUsing ? '🟢 ' : isWalkIn ? '🚶 ' : '🎾 '}{booking.leadBookerName}
                               </span>
                               <span className={styles.bookingMeta}>
                                 {booking.durationMinutes}m · {isUsing ? 'USING' : isWalkIn ? 'WALK-IN' : isConfirmed ? 'BOOKED' : 'RESERVED'}
@@ -732,7 +732,7 @@ export default function AdminSchedulePage() {
                     gap: '6px',
                   }}
                 >
-                  ðŸ“… Advance Reservation
+                  📅 Advance Reservation
                 </button>
                 <button
                   type="button"
@@ -1077,7 +1077,7 @@ export default function AdminSchedulePage() {
                             cursor: 'pointer',
                           }}
                         >
-                          ðŸ“± E-Wallet
+                          📱 E-Wallet
                         </button>
                         <button
                           type="button"
@@ -1289,9 +1289,9 @@ export default function AdminSchedulePage() {
                   <span style={{ color: 'var(--color-text-secondary)' }}>Player:</span>
                   <div style={{ textAlign: 'right' }}>
                     <strong>{selectedBooking.leadBookerName} ({selectedBooking.leadBookerEmail})</strong>
-                    {(selectedBooking.isWalkIn || selectedBooking.notes?.includes('Walk-in') || selectedBooking.notes?.includes('ðŸš¶')) && (
+                    {(selectedBooking.isWalkIn || selectedBooking.notes?.includes('Walk-in') || selectedBooking.notes?.includes('🚶')) && (
                       <span style={{ display: 'inline-block', marginLeft: '6px', fontSize: '10px', background: 'rgba(168, 85, 247, 0.2)', color: 'var(--ink-purple)', border: '1px solid rgba(168, 85, 247, 0.5)', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
-                        ðŸš¶ Walk-in Player
+                        🚶 Walk-in Player
                       </span>
                     )}
                   </div>
