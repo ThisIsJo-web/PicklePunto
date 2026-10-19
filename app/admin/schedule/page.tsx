@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import AdminHeader from '@/components/layout/AdminHeader';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Badge from '@/components/ui/Badge';
 import { CourtDto } from '@/types';
-import { formatDate, formatTimeString } from '@/lib/utils/date';
+import { formatDate, formatTime, formatTimeString } from '@/lib/utils/date';
 import { useRealtimeSchedule } from '@/lib/hooks/useRealtimeSchedule';
 import { addDays, subDays, format } from 'date-fns';
 import styles from './schedule.module.css';
@@ -21,6 +21,18 @@ const TIME_SLOTS = [
   '18:00', '18:30', '19:00', '19:30', '20:00', '20:30',
   '21:00', '21:30', '22:00',
 ];
+
+type GridCell =
+  | { kind: 'skip' }
+  | { kind: 'free' }
+  | { kind: 'closed'; span: number }
+  | { kind: 'block'; span: number; block: any }
+  | { kind: 'booking'; span: number; booking: any };
+
+function toMinutes(time: string): number {
+  const [h, m] = time.split(':').map(Number);
+  return h * 60 + (m || 0);
+}
 
 export default function AdminSchedulePage() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -154,11 +166,176 @@ export default function AdminSchedulePage() {
     });
   }
 
+  // ── Live clock: drives the "NOW" row, in-play status and utilization ──
+  const [nowTick, setNowTick] = useState<number>(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNowTick(Date.now()), 30000);
+    return () => clearInterval(t);
+  }, []);
+
+  const gridRef = useRef<HTMLDivElement>(null);
+  const scrolledForDate = useRef<string>('');
+  const [toast, setToast] = useState<string | null>(null);
+
+  function showToast(message: string) {
+    setToast(message);
+    setTimeout(() => setToast(null), 3200);
+  }
+
+  function openBooking(booking: any) {
+    setPaymentError(null);
+    setPaymentRef('');
+    setSelectedBooking(booking);
+  }
+
+  // Close the details drawer with Escape
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSelectedBooking(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  const peso = (value: number | string | undefined | null) => {
+    const n = typeof value === 'string' ? parseFloat(value) : value ?? 0;
+    return `₱${(Number.isFinite(n) ? (n as number) : 0).toFixed(2)}`;
+  };
+
+  const isToday = dateStr === format(new Date(nowTick), 'yyyy-MM-dd');
+  const nowSlotIndex = isToday
+    ? TIME_SLOTS.findIndex((s) => {
+        const st = new Date(`${dateStr}T${s}:00`).getTime();
+        return st <= nowTick && nowTick < st + 30 * 60000;
+      })
+    : -1;
+
+  // On load / date change, scroll the grid to the current time (today) or the top
+  useEffect(() => {
+    if (loading || !gridRef.current || scrolledForDate.current === dateStr) return;
+    scrolledForDate.current = dateStr;
+    const row = gridRef.current.querySelector('[data-now-row="true"]') as HTMLElement | null;
+    gridRef.current.scrollTo({ top: row ? Math.max(0, row.offsetTop - 110) : 0, behavior: 'smooth' });
+  }, [loading, dateStr]);
+
+  // Visual + semantic state of a booking (one source of truth for colour, label, behaviour)
+  function getBookingState(b: any) {
+    const s = new Date(b.startTime).getTime();
+    const e = new Date(b.endTime).getTime();
+    const paid = b.status === 'CONFIRMED';
+    const walkIn =
+      Boolean(b.isWalkIn) || Boolean(b.notes?.includes('Walk-in')) || Boolean(b.notes?.includes('🚶'));
+    const using = paid && s <= nowTick && e > nowTick;
+    const past = e <= nowTick;
+    const key: 'using' | 'awaiting' | 'walkin' | 'confirmed' = using
+      ? 'using'
+      : !paid
+      ? 'awaiting'
+      : walkIn
+      ? 'walkin'
+      : 'confirmed';
+    const labels = {
+      using: 'In Play',
+      awaiting: 'Awaiting Payment',
+      walkin: 'Walk-in · Paid',
+      confirmed: 'Booked · Paid',
+    };
+    const emojis = { using: '🟢', awaiting: '⏳', walkin: '🚶', confirmed: '🎾' };
+    return { key, label: labels[key], emoji: emojis[key], paid, walkIn, using, past };
+  }
+
+  const toneClass = {
+    using: styles.bookingUsing,
+    awaiting: styles.bookingAwaiting,
+    walkin: styles.bookingWalkIn,
+    confirmed: styles.bookingConfirmed,
+  };
+
+  // Build one column of cells per court. Bookings / blocks / closed hours are merged
+  // into a single tall cell (rowSpan) so a 90-minute booking reads as ONE card.
+  function buildColumn(court: CourtDto): GridCell[] {
+    const cells: GridCell[] = [];
+    const total = TIME_SLOTS.length;
+    const pushSpan = (cell: GridCell, span: number) => {
+      cells.push(cell);
+      for (let k = 1; k < span; k++) cells.push({ kind: 'skip' });
+    };
+
+    let i = 0;
+    while (i < total) {
+      const slot = TIME_SLOTS[i];
+
+      if (!isCourtOpen(court, slot)) {
+        let span = 1;
+        while (i + span < total && !isCourtOpen(court, TIME_SLOTS[i + span])) span++;
+        pushSpan({ kind: 'closed', span }, span);
+        i += span;
+        continue;
+      }
+
+      const block = getBlockAtSlot(court.id, slot);
+      if (block) {
+        let span = 1;
+        while (
+          i + span < total &&
+          isCourtOpen(court, TIME_SLOTS[i + span]) &&
+          getBlockAtSlot(court.id, TIME_SLOTS[i + span])?.id === block.id
+        ) {
+          span++;
+        }
+        pushSpan({ kind: 'block', span, block }, span);
+        i += span;
+        continue;
+      }
+
+      const booking = getBookingAtSlot(court.id, slot);
+      if (booking) {
+        let span = 1;
+        while (i + span < total) {
+          const next = TIME_SLOTS[i + span];
+          if (
+            !isCourtOpen(court, next) ||
+            getBlockAtSlot(court.id, next) ||
+            getBookingAtSlot(court.id, next)?.id !== booking.id
+          ) {
+            break;
+          }
+          span++;
+        }
+        pushSpan({ kind: 'booking', span, booking }, span);
+        i += span;
+        continue;
+      }
+
+      cells.push({ kind: 'free' });
+      i++;
+    }
+    return cells;
+  }
+  const columns = courts.map(buildColumn);
+
+  // ── At-a-glance stats for the selected day ──
+  const activeBookings = bookings.filter((b) => b.status !== 'CANCELLED' && b.status !== 'NO_SHOW');
+  const stats = {
+    total: activeBookings.length,
+    playing: activeBookings.filter((b) => getBookingState(b).using).length,
+    awaiting: activeBookings.filter((b) => b.status !== 'CONFIRMED').length,
+    revenue: activeBookings
+      .filter((b) => b.status === 'CONFIRMED')
+      .reduce((sum, b) => sum + (parseFloat(b.totalAmount) || 0), 0),
+  };
+  const openMinutes = courts.reduce(
+    (sum, c) => sum + Math.max(0, toMinutes(c.closingTime) - toMinutes(c.openingTime)),
+    0
+  );
+  const bookedMinutes = activeBookings.reduce((sum, b) => sum + (b.durationMinutes || 0), 0);
+  const utilization = openMinutes > 0 ? Math.min(100, Math.round((bookedMinutes / openMinutes) * 100)) : 0;
+
   // Interactive slot click
   function handleSlotClick(courtId: string, timeSlot: string) {
     const slotTarget = new Date(`${dateStr}T${timeSlot}:00`);
     if (slotTarget.getTime() <= Date.now()) {
-      alert('Cannot reserve or book a slot in the past. Please select an upcoming slot or use Walk-in.');
+      showToast('Cannot reserve a slot in the past. Please pick an upcoming slot or use Walk-in.');
       return;
     }
     setIsWalkInMode(false);
@@ -282,7 +459,7 @@ export default function AdminSchedulePage() {
           payload.initialStatus = 'CONFIRMED';
           payload.paymentMethod = 'CASH';
           payload.paymentReference = walkInCashTendered
-            ? `Tendered $${parseFloat(walkInCashTendered).toFixed(2)} (Change: $${Math.max(0, parseFloat(walkInCashTendered) - totalAmount).toFixed(2)})`
+            ? `Tendered ₱${parseFloat(walkInCashTendered).toFixed(2)} (Change: ₱${Math.max(0, parseFloat(walkInCashTendered) - totalAmount).toFixed(2)})`
             : 'Paid Cash at Counter';
         } else if (walkInPayMethod === 'EWALLET') {
           payload.initialStatus = 'CONFIRMED';
@@ -550,9 +727,55 @@ export default function AdminSchedulePage() {
             </div>
           </div>
 
-          {/* Schedule Grid Table */}
-          <div className={styles.timelineWrapper}>
-            <table className={styles.timelineTable} id="table-schedule-grid">
+          {/* At-a-glance stats for the selected day */}
+          <div className={styles.statsStrip}>
+            <div className={styles.statChip}>
+              <span className={styles.statChipIcon}>📅</span>
+              <div>
+                <div className={styles.statChipValue}>{stats.total}</div>
+                <div className={styles.statChipLabel}>Bookings</div>
+              </div>
+            </div>
+            <div className={styles.statChip}>
+              <span className={styles.statChipIcon}>🟢</span>
+              <div>
+                <div className={styles.statChipValue}>{stats.playing}</div>
+                <div className={styles.statChipLabel}>In Play Now</div>
+              </div>
+            </div>
+            <div className={`${styles.statChip} ${stats.awaiting > 0 ? styles.statChipAttention : ''}`}>
+              <span className={styles.statChipIcon}>⏳</span>
+              <div>
+                <div className={styles.statChipValue}>{stats.awaiting}</div>
+                <div className={styles.statChipLabel}>Awaiting Payment</div>
+              </div>
+            </div>
+            <div className={styles.statChip}>
+              <span className={styles.statChipIcon}>💰</span>
+              <div>
+                <div className={styles.statChipValue}>{peso(stats.revenue).replace('.00', '')}</div>
+                <div className={styles.statChipLabel}>Confirmed Revenue</div>
+              </div>
+            </div>
+            <div className={styles.statChip}>
+              <span className={styles.statChipIcon}>📈</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className={styles.statChipValue}>{utilization}%</div>
+                <div className={styles.statChipLabel}>Court Utilization</div>
+                <div className={styles.utilBar}>
+                  <div className={styles.utilFill} style={{ width: `${utilization}%` }} />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Schedule Grid */}
+          <div className={styles.timelineWrapper} ref={gridRef}>
+            <table
+              className={styles.timelineTable}
+              id="table-schedule-grid"
+              style={{ minWidth: 84 + Math.max(courts.length, 1) * 176 }}
+            >
               <thead>
                 <tr>
                   <th className={styles.timeHeaderCol}>Time</th>
@@ -560,139 +783,169 @@ export default function AdminSchedulePage() {
                     <th key={court.id} className={styles.courtHeaderCol}>
                       <div className={styles.courtTitle}>{court.name}</div>
                       <div className={styles.courtSubtitle}>
-                        ${parseFloat(court.hourlyRate).toFixed(2)}/hr · {court.surfaceType}
+                        {court.surfaceType} · {peso(court.hourlyRate)}/hr
                       </div>
                       <span className={styles.courtHoursTag}>
-                        Hours: {formatTimeString(court.openingTime)} – {formatTimeString(court.closingTime)}
+                        {formatTimeString(court.openingTime)} – {formatTimeString(court.closingTime)}
                       </span>
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {TIME_SLOTS.map((slot) => (
-                  <tr key={slot}>
-                    <td className={styles.timeCell}>{formatTimeString(slot)}</td>
-                    {courts.map((court) => {
-                      const open = isCourtOpen(court, slot);
-                      const block = open ? getBlockAtSlot(court.id, slot) : null;
-                      const booking = open && !block ? getBookingAtSlot(court.id, slot) : null;
+                {TIME_SLOTS.map((slot, i) => {
+                  const isHour = slot.endsWith(':00');
+                  const isNow = i === nowSlotIndex;
+                  return (
+                    <tr
+                      key={slot}
+                      data-now-row={isNow ? 'true' : undefined}
+                      className={`${isHour ? styles.rowHour : ''} ${isNow ? styles.rowNow : ''}`}
+                    >
+                      <td className={`${styles.timeCell} ${isHour ? styles.timeCellHour : ''}`}>
+                        {isHour ? (
+                          formatTimeString(slot)
+                        ) : (
+                          <span className={styles.timeCellHalf}>:{slot.slice(3)}</span>
+                        )}
+                        {isNow && <span className={styles.nowTag}>NOW</span>}
+                      </td>
 
-                      if (!open) {
+                      {courts.map((court, ci) => {
+                        const cell = columns[ci]?.[i];
+                        if (!cell || cell.kind === 'skip') return null;
+
+                        if (cell.kind === 'closed') {
+                          return (
+                            <td
+                              key={court.id}
+                              rowSpan={cell.span}
+                              className={`${styles.slotCell} ${styles.slotClosed}`}
+                            >
+                              <div className={styles.closedInner}>{cell.span >= 2 ? 'Closed' : ''}</div>
+                            </td>
+                          );
+                        }
+
+                        if (cell.kind === 'block') {
+                          const { block, span } = cell;
+                          return (
+                            <td key={court.id} rowSpan={span} className={styles.slotCell}>
+                              <button
+                                type="button"
+                                className={styles.blockedBlock}
+                                onClick={() => handleRemoveBlock(block.id)}
+                                title={`Blocked: ${block.reason || 'Maintenance'}. Click to unblock.`}
+                              >
+                                <span className={styles.blockedTitle}>🔒 {block.reason || 'Court Blocked'}</span>
+                                <span className={styles.blockedSubtitle}>
+                                  {formatTime(block.blockedFrom)} – {formatTime(block.blockedTo)}
+                                </span>
+                                {span >= 2 && <span className={styles.blockedHint}>Tap to unblock</span>}
+                              </button>
+                            </td>
+                          );
+                        }
+
+                        if (cell.kind === 'booking') {
+                          const { booking, span } = cell;
+                          const st = getBookingState(booking);
+                          const compact = span <= 1;
+                          return (
+                            <td key={court.id} rowSpan={span} className={styles.slotCell}>
+                              <button
+                                type="button"
+                                data-booking="true"
+                                className={`${styles.bookingBlock} ${toneClass[st.key]} ${
+                                  st.past ? styles.bookingPast : ''
+                                } ${compact ? styles.bookingCompact : ''}`}
+                                onClick={() => openBooking(booking)}
+                                title={`${st.label} · ${booking.leadBookerName} · ${formatTime(
+                                  booking.startTime
+                                )} – ${formatTime(booking.endTime)}`}
+                              >
+                                {!compact && (
+                                  <span className={styles.bookingTop}>
+                                    <span className={styles.bookingStatus}>
+                                      {st.emoji} {st.label}
+                                    </span>
+                                    {span >= 3 && (
+                                      <span className={styles.bookingPrice}>{peso(booking.totalAmount)}</span>
+                                    )}
+                                  </span>
+                                )}
+                                <span className={styles.bookingBooker}>
+                                  {compact ? `${st.emoji} ` : ''}
+                                  {booking.leadBookerName}
+                                </span>
+                                <span className={styles.bookingMeta}>
+                                  {formatTime(booking.startTime)} – {formatTime(booking.endTime)}
+                                </span>
+                                {!compact && st.walkIn && st.key !== 'walkin' && (
+                                  <span className={styles.bookingMeta}>🚶 Walk-in guest</span>
+                                )}
+                                {!compact && st.key === 'awaiting' && (
+                                  <span className={styles.bookingCta}>Tap to verify payment →</span>
+                                )}
+                              </button>
+                            </td>
+                          );
+                        }
+
+                        // Free slot
+                        const slotDate = new Date(`${dateStr}T${slot}:00`);
+                        const slotEnd = new Date(slotDate.getTime() + 30 * 60000);
+                        const isConcluded = slotEnd.getTime() <= nowTick;
+                        const isOngoing = slotDate.getTime() <= nowTick && !isConcluded;
+
                         return (
-                          <td key={court.id} className={`${styles.slotCell} ${styles.slotClosed}`}>
-                            Closed
-                          </td>
-                        );
-                      }
-
-                      if (block) {
-                        return (
-                          <td
-                            key={court.id}
-                            className={styles.slotCell}
-                            onClick={() => handleRemoveBlock(block.id)}
-                            title={`Blocked: ${block.reason}. Click to unblock.`}
-                          >
-                            <div className={styles.blockedBlock}>
-                              <span className={styles.blockedTitle}>🔒 {block.reason}</span>
-                              <span className={styles.blockedSubtitle}>Maintenance Block</span>
-                            </div>
-                          </td>
-                        );
-                      }
-
-                      if (booking) {
-                        const now = new Date();
-                        const isConfirmed = booking.status === 'CONFIRMED';
-                        const isUsing = isConfirmed && new Date(booking.startTime) <= now && new Date(booking.endTime) >= now;
-                        const isWalkIn = Boolean(booking.isWalkIn) || booking.notes?.includes('Walk-in') || booking.notes?.includes('🚶');
-
-                        return (
-                          <td
-                            key={court.id}
-                            className={styles.slotCell}
-                            onClick={() => setSelectedBooking(booking)}
-                          >
-                            <div
-                              className={`${styles.bookingBlock} ${
-                                isUsing
-                                  ? styles.bookingUsing
-                                  : isWalkIn
-                                  ? styles.bookingWalkIn
-                                  : isConfirmed
-                                  ? styles.bookingConfirmed
-                                  : styles.bookingAwaiting
+                          <td key={court.id} className={styles.slotCell}>
+                            <button
+                              type="button"
+                              className={`${styles.slotAvailable} ${
+                                isConcluded ? styles.slotPast : isOngoing ? styles.slotOngoing : ''
                               }`}
-                              title={isWalkIn ? `🚶 Walk-in Session: ${booking.leadBookerName}` : `Click to view reservation & verify payment`}
+                              onClick={() => {
+                                if (isConcluded) {
+                                  showToast('That time has already passed — pick an upcoming slot.');
+                                  return;
+                                }
+                                if (isOngoing) {
+                                  handleOpenWalkInModal(court.id, slot);
+                                  return;
+                                }
+                                handleSlotClick(court.id, slot);
+                              }}
+                              title={
+                                isConcluded
+                                  ? 'Time has passed'
+                                  : isOngoing
+                                  ? `Walk-in play on ${court.name} right now`
+                                  : `Reserve ${court.name} at ${formatTimeString(slot)}`
+                              }
                             >
-                              <span className={styles.bookingBooker}>
-                                {isUsing ? '🟢 ' : isWalkIn ? '🚶 ' : '🎾 '}{booking.leadBookerName}
+                              <span className={styles.slotAvailableText}>
+                                {isConcluded ? '' : isOngoing ? '⚡ Walk-in' : '+ Reserve'}
                               </span>
-                              <span className={styles.bookingMeta}>
-                                {booking.durationMinutes}m · {isUsing ? 'USING' : isWalkIn ? 'WALK-IN' : isConfirmed ? 'BOOKED' : 'RESERVED'}
-                              </span>
-                            </div>
+                            </button>
                           </td>
                         );
-                      }
-
-                      const slotDate = new Date(`${dateStr}T${slot}:00`);
-                      const slotEnd = new Date(slotDate.getTime() + 30 * 60000);
-                      const isConcluded = slotEnd.getTime() <= Date.now();
-                      const isOngoing = slotDate.getTime() <= Date.now() && !isConcluded;
-
-                      return (
-                        <td
-                          key={court.id}
-                          className={styles.slotCell}
-                          onClick={() => {
-                            if (isConcluded) {
-                              alert('Cannot reserve or book a slot that has already concluded. Please select an upcoming slot.');
-                              return;
-                            }
-                            if (isOngoing) {
-                              handleOpenWalkInModal(court.id, slot);
-                              return;
-                            }
-                            handleSlotClick(court.id, slot);
-                          }}
-                          title={
-                            isConcluded
-                              ? 'Concluded slot'
-                              : isOngoing
-                              ? `Click for immediate Walk-in play on ${court.name}`
-                              : `Click to reserve ${court.name} at ${formatTimeString(slot)}`
-                          }
-                        >
-                          <div
-                            className={styles.slotAvailable}
-                            style={
-                              isConcluded
-                                ? { opacity: 0.35, cursor: 'not-allowed' }
-                                : isOngoing
-                                ? { opacity: 0.85, background: 'rgba(168, 85, 247, 0.12)', border: '1px dashed #a855f7' }
-                                : undefined
-                            }
-                          >
-                            <span
-                              className={styles.slotAvailableText}
-                              style={isOngoing ? { display: 'inline', color: 'var(--ink-purple)', fontWeight: 600 } : undefined}
-                            >
-                              {isConcluded ? '— Past' : isOngoing ? '⚡ Walk-in' : '+ Reserve'}
-                            </span>
-                          </div>
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
+                      })}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
+
+          {toast && (
+            <div className={styles.toast} role="status">
+              {toast}
+            </div>
+          )}
         </div>
 
-        {/* â”€â”€ Booking / Walk-in Modal â”€â”€ */}
+        {/* ── Booking / Walk-in Modal ── */}
         {isBookingModalOpen && (
           <div className={pageStyles.modalBackdrop}>
             <div className={pageStyles.modalCard} role="dialog" aria-modal="true">
@@ -705,7 +958,7 @@ export default function AdminSchedulePage() {
                   className={pageStyles.modalClose}
                   onClick={() => setIsBookingModalOpen(false)}
                 >
-                  âœ•
+                  ✕
                 </button>
               </div>
 
@@ -890,7 +1143,7 @@ export default function AdminSchedulePage() {
                     >
                       {courts.map((c) => (
                         <option key={c.id} value={c.id}>
-                          {c.name} (${parseFloat(c.hourlyRate).toFixed(0)}/hr)
+                          {c.name} (₱{parseFloat(c.hourlyRate).toFixed(0)}/hr)
                         </option>
                       ))}
                     </select>
@@ -974,7 +1227,7 @@ export default function AdminSchedulePage() {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
                     <div>
                       <label style={{ fontSize: '11px', color: 'var(--color-text-secondary)', display: 'block' }}>
-                        Paddle Rentals ($5 each)
+                        Paddle Rentals ({paddleProduct ? peso(paddleProduct.price) : 'n/a'} each)
                       </label>
                       <input
                         id="input-paddle-qty"
@@ -988,7 +1241,7 @@ export default function AdminSchedulePage() {
                     </div>
                     <div>
                       <label style={{ fontSize: '11px', color: 'var(--color-text-secondary)', display: 'block' }}>
-                        Ball Can 3-pk ($9.50)
+                        Ball Can 3-pk ({ballProduct ? peso(ballProduct.price) : 'n/a'})
                       </label>
                       <input
                         id="input-ball-qty"
@@ -1027,11 +1280,11 @@ export default function AdminSchedulePage() {
                       TOTAL AMOUNT
                     </span>
                     <strong style={{ fontSize: 'var(--text-lg)', color: 'var(--color-brand-400)' }}>
-                      ${totalAmount.toFixed(2)}
+                      {peso(totalAmount)}
                     </strong>
                     {bookSplitCount > 1 && (
                       <span style={{ fontSize: '10px', color: 'var(--color-text-secondary)', display: 'block' }}>
-                        (${perPersonShare} / person)
+                        ({peso(perPersonShare)} / person)
                       </span>
                     )}
                   </div>
@@ -1094,7 +1347,7 @@ export default function AdminSchedulePage() {
                             cursor: 'pointer',
                           }}
                         >
-                          â³ Pay Later
+                          ⏳ Pay Later
                         </button>
                       </div>
                     </div>
@@ -1103,7 +1356,7 @@ export default function AdminSchedulePage() {
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)', alignItems: 'center' }}>
                         <div>
                           <label style={{ display: 'block', fontSize: '11px', color: 'var(--color-text-secondary)', marginBottom: '2px' }}>
-                            Cash Tendered ($)
+                            Cash Tendered (₱)
                           </label>
                           <input
                             id="input-cash-tendered"
@@ -1119,7 +1372,7 @@ export default function AdminSchedulePage() {
                         <div style={{ background: 'var(--color-bg-surface)', padding: '6px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)' }}>
                           <span style={{ fontSize: '10px', color: 'var(--color-text-muted)', display: 'block' }}>CHANGE DUE</span>
                           <strong style={{ fontSize: 'var(--text-sm)', color: (parseFloat(walkInCashTendered) || 0) >= totalAmount ? 'var(--color-brand-400)' : 'var(--color-text-muted)' }}>
-                            ${Math.max(0, (parseFloat(walkInCashTendered) || 0) - totalAmount).toFixed(2)}
+                            {peso(Math.max(0, (parseFloat(walkInCashTendered) || 0) - totalAmount))}
                           </strong>
                         </div>
                       </div>
@@ -1170,7 +1423,7 @@ export default function AdminSchedulePage() {
           </div>
         )}
 
-        {/* â”€â”€ Court Blocking Modal (Maintenance & Event Drag-to-block) â”€â”€ */}
+        {/* ── Court Blocking Modal ── */}
         {isBlockModalOpen && (
           <div className={pageStyles.modalBackdrop}>
             <div className={pageStyles.modalCard} role="dialog" aria-modal="true">
@@ -1181,7 +1434,7 @@ export default function AdminSchedulePage() {
                   className={pageStyles.modalClose}
                   onClick={() => setIsBlockModalOpen(false)}
                 >
-                  âœ•
+                  ✕
                 </button>
               </div>
 
@@ -1253,184 +1506,194 @@ export default function AdminSchedulePage() {
           </div>
         )}
 
-        {/* â”€â”€ Booking Details & E-Wallet Verification Drawer/Modal â”€â”€ */}
-        {selectedBooking && (
-          <div className={pageStyles.modalBackdrop}>
-            <div className={pageStyles.modalCard} role="dialog" aria-modal="true">
-              <div className={pageStyles.modalHeader}>
-                <div>
-                  <h2 className={pageStyles.modalTitle}>Reservation Details</h2>
-                  <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>
-                    ID: {selectedBooking.id}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  className={pageStyles.modalClose}
-                  onClick={() => setSelectedBooking(null)}
-                >
-                  âœ•
-                </button>
-              </div>
+        {/* ── Reservation Details Drawer ── */}
+        {selectedBooking && (() => {
+          const sb = selectedBooking;
+          const st = getBookingState(sb);
+          const addons: any[] = sb.addons || [];
+          const participants: any[] = sb.participants || [];
+          return (
+            <div className={styles.drawerBackdrop} onClick={() => setSelectedBooking(null)}>
+              <aside
+                className={styles.drawer}
+                role="dialog"
+                aria-modal="true"
+                aria-label="Reservation details"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <header className={`${styles.drawerHeader} ${toneClass[st.key]}`}>
+                  <div style={{ minWidth: 0 }}>
+                    <span className={styles.drawerStatus}>
+                      {st.emoji} {st.label}
+                    </span>
+                    <h2 className={styles.drawerTitle}>{sb.courtName}</h2>
+                    <p className={styles.drawerWhen}>
+                      {formatDate(sb.startTime)} · {formatTime(sb.startTime)} – {formatTime(sb.endTime)}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className={styles.drawerClose}
+                    onClick={() => setSelectedBooking(null)}
+                    aria-label="Close details"
+                  >
+                    ✕
+                  </button>
+                </header>
 
-              {paymentError && (
-                <div style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', color: 'var(--color-error)', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)', fontSize: 'var(--text-sm)' }}>
-                  {paymentError}
-                </div>
-              )}
+                <div className={styles.drawerBody}>
+                  {paymentError && <div className={styles.drawerError}>{paymentError}</div>}
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', fontSize: 'var(--text-sm)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 'var(--space-2)', borderBottom: '1px solid var(--color-border)' }}>
-                  <span style={{ color: 'var(--color-text-secondary)' }}>Court:</span>
-                  <strong>{selectedBooking.courtName}</strong>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 'var(--space-2)', borderBottom: '1px solid var(--color-border)' }}>
-                  <span style={{ color: 'var(--color-text-secondary)' }}>Player:</span>
-                  <div style={{ textAlign: 'right' }}>
-                    <strong>{selectedBooking.leadBookerName} ({selectedBooking.leadBookerEmail})</strong>
-                    {(selectedBooking.isWalkIn || selectedBooking.notes?.includes('Walk-in') || selectedBooking.notes?.includes('🚶')) && (
-                      <span style={{ display: 'inline-block', marginLeft: '6px', fontSize: '10px', background: 'rgba(168, 85, 247, 0.2)', color: 'var(--ink-purple)', border: '1px solid rgba(168, 85, 247, 0.5)', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
-                        🚶 Walk-in Player
+                  {/* Player */}
+                  <section className={styles.drawerCard}>
+                    <div className={styles.playerRow}>
+                      <span className={styles.playerAvatar}>
+                        {(sb.leadBookerName || '?').trim().charAt(0).toUpperCase()}
                       </span>
-                    )}
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 'var(--space-2)', borderBottom: '1px solid var(--color-border)' }}>
-                  <span style={{ color: 'var(--color-text-secondary)' }}>Time:</span>
-                  <strong>{formatDate(selectedBooking.startTime)} · {selectedBooking.durationMinutes} mins</strong>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 'var(--space-2)', borderBottom: '1px solid var(--color-border)' }}>
-                  <span style={{ color: 'var(--color-text-secondary)' }}>Total Due:</span>
-                  <strong style={{ color: 'var(--color-brand-400)', fontSize: 'var(--text-base)' }}>
-                    ${parseFloat(selectedBooking.totalAmount).toFixed(2)}
-                  </strong>
-                </div>
-
-                {selectedBooking.notes && (
-                  <div style={{ background: 'var(--color-bg-raised)', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-xs)' }}>
-                    <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', display: 'block', marginBottom: '2px' }}>
-                      Notes & Payment Details:
-                    </span>
-                    <span style={{ color: 'var(--color-text-primary)' }}>
-                      {selectedBooking.notes}
-                    </span>
-                  </div>
-                )}
-
-                {/* Addons List */}
-                {selectedBooking.addons && selectedBooking.addons.length > 0 && (
-                  <div style={{ background: 'var(--color-bg-raised)', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)' }}>
-                    <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', display: 'block', marginBottom: '4px' }}>
-                      Add-on Gear Rentals:
-                    </span>
-                    {selectedBooking.addons.map((a: any) => (
-                      <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-xs)' }}>
-                        <span>â€¢ {a.productName} Ã— {a.quantity}</span>
-                        <span>${(parseFloat(a.unitPrice) * a.quantity).toFixed(2)}</span>
+                      <div style={{ minWidth: 0 }}>
+                        <div className={styles.playerName}>{sb.leadBookerName}</div>
+                        {sb.leadBookerEmail && <div className={styles.playerEmail}>{sb.leadBookerEmail}</div>}
                       </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Split Participants (Module A.3) */}
-                {selectedBooking.participants && selectedBooking.participants.length > 0 && (
-                  <div style={{ background: 'var(--color-bg-raised)', padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)' }}>
-                    <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', display: 'block', marginBottom: '4px' }}>
-                      Split Payment Shares ({selectedBooking.participants.length} Players):
-                    </span>
-                    {selectedBooking.participants.map((p: any, idx: number) => (
-                      <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 'var(--text-xs)', marginTop: '4px' }}>
-                        <span>Player {idx + 1} Share: <strong>${parseFloat(p.shareAmount).toFixed(2)}</strong></span>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                          <Badge
-                            label={p.paymentStatus}
-                            status={p.paymentStatus === 'PAID' ? 'confirmed' : 'pending'}
-                          />
-                          {p.paymentStatus === 'PENDING' && (
-                            <button
-                              type="button"
-                              onClick={() => handleConfirmPayment(p.id)}
-                              style={{ background: 'var(--color-lime-400)', border: 'none', color: 'var(--color-brand-700)', fontSize: '10px', fontWeight: 600, padding: '2px 6px', borderRadius: 'var(--radius-sm)', cursor: 'pointer' }}
-                            >
-                              Verify Share
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* E-Wallet Staff Verification Box */}
-                {selectedBooking.status === 'AWAITING_PAYMENT' && (
-                  <div style={{ background: 'rgba(234, 179, 8, 0.08)', border: '1px solid rgba(234, 179, 8, 0.3)', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', marginTop: 'var(--space-2)' }}>
-                    <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--ink-amber)', display: 'block', marginBottom: 'var(--space-2)' }}>
-                      E-Wallet / Cash Payment Verification
-                    </span>
-                    <div style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-2)' }}>
-                      <select
-                        value={paymentMethod}
-                        onChange={(e) => setPaymentMethod(e.target.value as any)}
-                        style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text-primary)', padding: 'var(--space-1) var(--space-2)', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-xs)' }}
-                      >
-                        <option value="EWALLET">E-Wallet Transfer</option>
-                        <option value="CASH">Cash Counter</option>
-                      </select>
-
-                      <input
-                        placeholder="Ref # (e.g. EW-982143)"
-                        value={paymentRef}
-                        onChange={(e) => setPaymentRef(e.target.value)}
-                        style={{ flex: 1, background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text-primary)', padding: 'var(--space-1) var(--space-2)', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-xs)' }}
-                      />
+                      {st.walkIn && <span className={styles.walkInTag}>🚶 Walk-in</span>}
                     </div>
-                    <Button
-                      id="btn-confirm-full-payment"
-                      type="button"
-                      variant="primary"
-                      size="sm"
-                      loading={verifyingPayment}
-                      onClick={() => handleConfirmPayment()}
-                    >
-                      âœ“ Confirm Full Payment & Mark Confirmed
-                    </Button>
-                  </div>
-                )}
+                  </section>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'var(--space-3)', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
-                  <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                    <Button
-                      id="btn-void-noshow"
-                      type="button"
-                      variant="danger"
-                      size="sm"
-                      onClick={() => handleCancelSelectedBooking('NO_SHOW')}
-                      title="Void reservation after 30-minute onsite physical no-show grace period"
-                    >
-                      Void (30m No-Show)
-                    </Button>
-                    <Button
-                      id="btn-cancel-reservation"
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      style={{ color: 'var(--ink-red)' }}
-                      onClick={() => handleCancelSelectedBooking('CANCELLED')}
-                    >
-                      Cancel Reservation
-                    </Button>
+                  {/* Key facts */}
+                  <div className={styles.factGrid}>
+                    <div className={styles.fact}>
+                      <span className={styles.factLabel}>Duration</span>
+                      <span className={styles.factValue}>{sb.durationMinutes} min</span>
+                    </div>
+                    <div className={styles.fact}>
+                      <span className={styles.factLabel}>{st.paid ? 'Total Paid' : 'Amount Due'}</span>
+                      <span className={`${styles.factValue} ${st.paid ? styles.factPaid : styles.factDue}`}>
+                        {peso(sb.totalAmount)}
+                      </span>
+                    </div>
                   </div>
-                  <Button type="button" variant="ghost" onClick={() => setSelectedBooking(null)}>
+
+                  {sb.notes && (
+                    <section className={styles.drawerCard}>
+                      <span className={styles.drawerSectionLabel}>Notes &amp; Payment Details</span>
+                      <p className={styles.drawerNotes}>{sb.notes}</p>
+                    </section>
+                  )}
+
+                  {addons.length > 0 && (
+                    <section className={styles.drawerCard}>
+                      <span className={styles.drawerSectionLabel}>Gear Rentals</span>
+                      {addons.map((a: any) => (
+                        <div key={a.id} className={styles.lineRow}>
+                          <span>
+                            {a.productName} × {a.quantity}
+                          </span>
+                          <strong>{peso(parseFloat(a.unitPrice) * a.quantity)}</strong>
+                        </div>
+                      ))}
+                    </section>
+                  )}
+
+                  {participants.length > 0 && (
+                    <section className={styles.drawerCard}>
+                      <span className={styles.drawerSectionLabel}>
+                        Split Payment · {participants.length} Players
+                      </span>
+                      {participants.map((p: any, idx: number) => (
+                        <div key={p.id} className={styles.lineRow}>
+                          <span>
+                            Player {idx + 1} · <strong>{peso(p.shareAmount)}</strong>
+                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                            <Badge
+                              label={p.paymentStatus}
+                              status={p.paymentStatus === 'PAID' ? 'confirmed' : 'pending'}
+                            />
+                            {p.paymentStatus === 'PENDING' && (
+                              <button
+                                type="button"
+                                className={styles.verifyShareBtn}
+                                onClick={() => handleConfirmPayment(p.id)}
+                              >
+                                Verify
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </section>
+                  )}
+
+                  {/* Payment verification */}
+                  {sb.status === 'AWAITING_PAYMENT' && (
+                    <section className={styles.verifyBox}>
+                      <span className={styles.verifyTitle}>💳 Verify payment to confirm this booking</span>
+                      <div className={styles.pillGroup}>
+                        <button
+                          type="button"
+                          className={`${styles.pillBtn} ${paymentMethod === 'EWALLET' ? styles.pillActive : ''}`}
+                          onClick={() => setPaymentMethod('EWALLET')}
+                        >
+                          📱 E-Wallet
+                        </button>
+                        <button
+                          type="button"
+                          className={`${styles.pillBtn} ${paymentMethod === 'CASH' ? styles.pillActive : ''}`}
+                          onClick={() => setPaymentMethod('CASH')}
+                        >
+                          💵 Cash
+                        </button>
+                      </div>
+                      {paymentMethod === 'EWALLET' && (
+                        <input
+                          className={styles.verifyInput}
+                          placeholder="Reference # (e.g. GCASH-982143)"
+                          value={paymentRef}
+                          onChange={(e) => setPaymentRef(e.target.value)}
+                        />
+                      )}
+                      <Button
+                        id="btn-confirm-full-payment"
+                        type="button"
+                        variant="primary"
+                        loading={verifyingPayment}
+                        onClick={() => handleConfirmPayment()}
+                        style={{ width: '100%' }}
+                      >
+                        ✓ Confirm Payment · {peso(sb.totalAmount)}
+                      </Button>
+                    </section>
+                  )}
+                </div>
+
+                <footer className={styles.drawerFooter}>
+                  <Button
+                    id="btn-void-noshow"
+                    type="button"
+                    variant="danger"
+                    size="sm"
+                    onClick={() => handleCancelSelectedBooking('NO_SHOW')}
+                    title="Void reservation after 30-minute onsite physical no-show grace period"
+                  >
+                    Void (No-Show)
+                  </Button>
+                  <Button
+                    id="btn-cancel-reservation"
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    style={{ color: 'var(--ink-red)' }}
+                    onClick={() => handleCancelSelectedBooking('CANCELLED')}
+                  >
+                    Cancel Booking
+                  </Button>
+                  <Button type="button" variant="secondary" size="sm" onClick={() => setSelectedBooking(null)}>
                     Close
                   </Button>
-                </div>
-              </div>
+                </footer>
+              </aside>
             </div>
-          </div>
-        )}
+          );
+        })()}
       </main>
     </>
   );
