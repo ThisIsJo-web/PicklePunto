@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="180" height="180">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#144a30"/>
+      <stop offset="100%" stop-color="#0a2318"/>
+    </linearGradient>
+    <linearGradient id="paddle" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ff7b5c"/>
+      <stop offset="100%" stop-color="#f04e2a"/>
+    </linearGradient>
+    <linearGradient id="ball" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#d4ff3b"/>
+      <stop offset="100%" stop-color="#a6e60b"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="1.5" flood-color="#000000" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+
+  <rect width="64" height="64" rx="16" fill="url(#bg)"/>
+  <rect x="1.5" y="1.5" width="61" height="61" rx="14.5" fill="none" stroke="#2d7d55" stroke-width="1.5"/>
+
+  <g filter="url(#shadow)">
+    <path d="M18 43 L9 52 C7.8 53.2 7.8 55.2 9 56.4 C10.2 57.6 12.2 57.6 13.4 56.4 L22.5 47.3 Z" fill="#ffffff"/>
+    <path d="M17 45 L11 51 M14 48 L12.5 53.5" stroke="#0a2318" stroke-width="1.2" stroke-linecap="round"/>
+
+    <rect x="18" y="11" width="30" height="34" rx="10" transform="rotate(-35 33 28)" fill="#ffffff"/>
+    <rect x="20" y="13" width="26" height="30" rx="8" transform="rotate(-35 33 28)" fill="url(#paddle)"/>
+  </g>
+
+  <g filter="url(#shadow)">
+    <circle cx="43" cy="21" r="13.5" fill="url(#ball)"/>
+    <circle cx="43" cy="21" r="13.5" fill="none" stroke="#ffffff" stroke-width="1.2" stroke-opacity="0.6"/>
+    
+    <circle cx="43" cy="21" r="2.2" fill="#0d2e20"/>
+    <circle cx="36.5" cy="17.5" r="1.8" fill="#0d2e20"/>
+    <circle cx="49.5" cy="17.5" r="1.8" fill="#0d2e20"/>
+    <circle cx="38.5" cy="26.5" r="1.8" fill="#0d2e20"/>
+    <circle cx="47.5" cy="26.5" r="1.8" fill="#0d2e20"/>
+    <circle cx="43" cy="13" r="1.5" fill="#0d2e20"/>
+    <circle cx="43" cy="29" r="1.5" fill="#0d2e20"/>
+  </g>
+</svg>

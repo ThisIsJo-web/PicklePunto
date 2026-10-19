@@ -5,6 +5,17 @@ import SfxProvider from '@/components/sfx/SfxProvider';
 export const metadata: Metadata = {
   title: { default: 'PicklePunto', template: '%s | PicklePunto' },
   description: 'Book pickleball courts, join the fun, and run your facility — PicklePunto.',
+  icons: {
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: '/favicon.ico', sizes: '32x32' },
+      { url: '/icon-32x32.png', sizes: '32x32', type: 'image/png' },
+    ],
+    shortcut: '/favicon.ico',
+    apple: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+    ],
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
