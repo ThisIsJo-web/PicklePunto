@@ -15,6 +15,14 @@ export async function middleware(request: NextRequest) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
+  const redirectWithCookies = (dest: string | URL) => {
+    const redirectRes = NextResponse.redirect(new URL(dest, request.url));
+    response.cookies.getAll().forEach((c) => {
+      redirectRes.cookies.set(c.name, c.value, c);
+    });
+    return redirectRes;
+  };
+
   const supabase = createServerClient(url, anonKey, {
     cookies: {
       getAll() {
@@ -26,7 +34,12 @@ export async function middleware(request: NextRequest) {
         );
         response = NextResponse.next({ request });
         cookiesToSet.forEach(({ name, value, options }) =>
-          response.cookies.set(name, value, options)
+          response.cookies.set(name, value, {
+            maxAge: 365 * 24 * 60 * 60,
+            sameSite: 'lax',
+            path: '/',
+            ...options,
+          })
         );
       },
     },
@@ -38,7 +51,7 @@ export async function middleware(request: NextRequest) {
   // ── Redirect unauthenticated users away from protected routes ───────────────
   if (!user) {
     if (pathname.startsWith('/admin') || pathname.startsWith('/portal')) {
-      return NextResponse.redirect(new URL('/login', request.url));
+      return redirectWithCookies('/login');
     }
     return response;
   }
@@ -55,13 +68,13 @@ export async function middleware(request: NextRequest) {
   // ── Authenticated: redirect away from auth pages ────────────────────────────
   if (pathname === '/login' || pathname === '/signup') {
     const dest = (role === 'ADMIN' || role === 'STAFF') ? '/admin/schedule' : '/portal';
-    return NextResponse.redirect(new URL(dest, request.url));
+    return redirectWithCookies(dest);
   }
 
   // ── Admin routes: require STAFF or ADMIN role ────────────────────────────────
   if (pathname.startsWith('/admin')) {
     if (role !== 'ADMIN' && role !== 'STAFF') {
-      return NextResponse.redirect(new URL('/portal', request.url));
+      return redirectWithCookies('/portal');
     }
   }
 

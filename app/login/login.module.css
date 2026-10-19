@@ -114,6 +114,84 @@
   gap: var(--space-2);
 }
 
+/* ── Remember Me Checkbox ── */
+.rememberRow {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  margin-top: calc(-1 * var(--space-1));
+  margin-bottom: var(--space-1);
+}
+
+.checkboxLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  cursor: pointer;
+  user-select: none;
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.checkboxInput {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.customCheckbox {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  border: 2px solid var(--color-border);
+  background: var(--color-bg-surface);
+  box-shadow: 0 2px 0 var(--color-border-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+  color: transparent;
+}
+
+.checkboxLabel:hover .customCheckbox {
+  border-color: var(--color-brand-400);
+  background: var(--color-brand-50);
+}
+
+.checkboxInput:focus-visible + .customCheckbox {
+  outline: 2px solid var(--color-lime-400);
+  outline-offset: 2px;
+}
+
+.checkboxInput:checked + .customCheckbox {
+  background: var(--color-brand-500);
+  border-color: var(--color-brand-600);
+  box-shadow: 0 2px 0 var(--color-brand-700);
+  color: #ffffff;
+}
+
+.checkIcon {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+}
+
+.rememberText {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.rememberSubtext {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
 .footer {
   margin-top: var(--space-6);
   text-align: center;

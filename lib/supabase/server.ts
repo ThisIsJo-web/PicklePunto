@@ -11,6 +11,11 @@ export async function createSupabaseServerClient() {
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-anon-key';
 
   return createServerClient(url, anonKey, {
+    cookieOptions: {
+      maxAge: 365 * 24 * 60 * 60,
+      sameSite: 'lax',
+      path: '/',
+    },
     cookies: {
       getAll() {
         return cookieStore.getAll();
@@ -18,7 +23,12 @@ export async function createSupabaseServerClient() {
       setAll(cookiesToSet) {
         try {
           cookiesToSet.forEach(({ name, value, options }) => {
-            cookieStore.set(name, value, options);
+            cookieStore.set(name, value, {
+              maxAge: 365 * 24 * 60 * 60,
+              sameSite: 'lax',
+              path: '/',
+              ...options,
+            });
           });
         } catch {
           // setAll called from a Server Component — safe to ignore

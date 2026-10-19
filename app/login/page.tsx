@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createSupabaseBrowserClient } from '@/lib/supabase/client';
@@ -11,12 +11,36 @@ import styles from './login.module.css';
 
 export default function LoginPage() {
   const router = useRouter();
+  const passwordInputRef = useRef<HTMLInputElement>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const supabase = createSupabaseBrowserClient();
+
+  // Load remembered credentials state on mount
+  useEffect(() => {
+    try {
+      const savedEmail = localStorage.getItem('picklepunto_remember_email');
+      const savedRemember = localStorage.getItem('picklepunto_remember_me');
+
+      if (savedRemember !== null) {
+        setRememberMe(savedRemember === 'true');
+      }
+
+      if (savedEmail) {
+        setEmail(savedEmail);
+        // Focus password input if email was already saved
+        setTimeout(() => {
+          passwordInputRef.current?.focus();
+        }, 60);
+      }
+    } catch {
+      // Ignore if localStorage unavailable
+    }
+  }, []);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -24,8 +48,23 @@ export default function LoginPage() {
     setError(null);
 
     try {
+      // Persist or clear remember-me preference
+      try {
+        if (rememberMe) {
+          localStorage.setItem('picklepunto_remember_email', email.trim());
+          localStorage.setItem('picklepunto_remember_me', 'true');
+          document.cookie = `picklepunto_remember=true; path=/; max-age=${365 * 24 * 60 * 60}; SameSite=Lax`;
+        } else {
+          localStorage.removeItem('picklepunto_remember_email');
+          localStorage.setItem('picklepunto_remember_me', 'false');
+          document.cookie = 'picklepunto_remember=; path=/; max-age=0; SameSite=Lax';
+        }
+      } catch {
+        // Safe to ignore storage errors
+      }
+
       const { data, error: signInError } = await supabase.auth.signInWithPassword({
-        email,
+        email: email.trim(),
         password,
       });
 
@@ -92,6 +131,7 @@ export default function LoginPage() {
           />
 
           <Input
+            ref={passwordInputRef}
             id="input-password"
             label="Password"
             type="password"
@@ -101,6 +141,36 @@ export default function LoginPage() {
             required
             autoComplete="current-password"
           />
+
+          <div className={styles.rememberRow}>
+            <label htmlFor="checkbox-remember-me" className={styles.checkboxLabel}>
+              <input
+                type="checkbox"
+                id="checkbox-remember-me"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className={styles.checkboxInput}
+                data-sfx="pop"
+              />
+              <span className={styles.customCheckbox} aria-hidden="true">
+                <svg
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className={styles.checkIcon}
+                >
+                  <polyline points="3.5 8.5 6.5 11.5 12.5 5" />
+                </svg>
+              </span>
+              <span className={styles.rememberText}>
+                Remember me
+                <span className={styles.rememberSubtext}>Stay signed in on this device</span>
+              </span>
+            </label>
+          </div>
 
           <Button
             id="btn-login-submit"

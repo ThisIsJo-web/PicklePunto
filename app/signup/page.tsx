@@ -44,6 +44,14 @@ export default function SignUpPage() {
       }
 
       if (data?.user) {
+        try {
+          localStorage.setItem('picklepunto_remember_email', email.trim());
+          localStorage.setItem('picklepunto_remember_me', 'true');
+          document.cookie = `picklepunto_remember=true; path=/; max-age=${365 * 24 * 60 * 60}; SameSite=Lax`;
+        } catch {
+          // Ignore
+        }
+
         // Also register in public.users table if not handled by Supabase trigger
         await fetch('/api/auth/sync-user', {
           method: 'POST',
