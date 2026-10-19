@@ -1047,3 +1047,111 @@
 .openPlayBlock .blockedHint {
   color: #15803d !important;
 }
+
+/* Duration Pill Disabled */
+.durationPillDisabled {
+  opacity: 0.45 !important;
+  cursor: not-allowed !important;
+  background: var(--color-bg-subtle) !important;
+  border-color: var(--color-border) !important;
+  color: var(--color-text-muted) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.durationPillDisabled:hover {
+  transform: none !important;
+  border-color: var(--color-border) !important;
+}
+
+.durationPillBadge {
+  display: block;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--color-coral-500);
+  margin-top: 2px;
+}
+
+/* Conflict & Alternative Suggestion Card */
+.conflictNoticeCard {
+  background: #fffbeb;
+  border: 1.5px solid #fde68a;
+  border-left: 4px solid #f59e0b;
+  border-radius: var(--radius-lg);
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.conflictNoticeHeader {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: #92400e;
+}
+
+.conflictNoticeHeader strong {
+  display: block;
+  font-size: var(--text-sm);
+  color: #78350f;
+  margin-bottom: 2px;
+}
+
+.conflictNoticeHeader p {
+  margin: 0;
+  color: #92400e;
+}
+
+.conflictAltSection {
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px dashed rgba(245, 158, 11, 0.4);
+}
+
+.conflictAltTitle {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  color: #78350f;
+  margin-bottom: 6px;
+}
+
+.conflictAltPills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.conflictAltBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #ffffff;
+  border: 1.5px solid #f59e0b;
+  border-radius: var(--radius-full);
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #92400e;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.conflictAltBtn:hover {
+  background: #fef3c7;
+  border-color: #d97706;
+  transform: translateY(-1px);
+}
+
+.conflictAltBadge {
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 99px;
+}

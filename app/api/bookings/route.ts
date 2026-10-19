@@ -252,7 +252,9 @@ export async function POST(request: Request) {
       });
 
       if (overlappingBooking) {
-        throw new Error('This court slot has already been reserved. Please select another time.');
+        const conflictStart = new Date(overlappingBooking.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const conflictEnd = new Date(overlappingBooking.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        throw new Error(`This court slot conflicts with an existing reservation (${conflictStart} - ${conflictEnd}). Please select a shorter duration or another court.`);
       }
 
       // Overlapping blocks check
@@ -265,7 +267,10 @@ export async function POST(request: Request) {
       });
 
       if (overlappingBlock) {
-        throw new Error('Court is blocked for maintenance or club events during this time.');
+        const blockReason = overlappingBlock.reason || 'Maintenance';
+        const blockStart = new Date(overlappingBlock.blockedFrom).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const blockEnd = new Date(overlappingBlock.blockedTo).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        throw new Error(`This court is blocked (${blockStart} - ${blockEnd}): ${blockReason}. Please pick another time or court.`);
       }
 
       // Calculate court rental cost

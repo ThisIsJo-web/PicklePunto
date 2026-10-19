@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import AdminHeader from '@/components/layout/AdminHeader';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
@@ -24,7 +24,7 @@ const TIME_SLOTS = [
 
 type GridCell =
   | { kind: 'skip' }
-  | { kind: 'free' }
+  | { kind: 'free'; maxMinutes?: number }
   | { kind: 'closed'; span: number }
   | { kind: 'block'; span: number; block: any }
   | { kind: 'booking'; span: number; booking: any };
@@ -317,7 +317,18 @@ export default function AdminSchedulePage() {
         continue;
       }
 
-      cells.push({ kind: 'free' });
+      // Count continuous free slots until next booking / block / closed
+      let freeSpan = 1;
+      while (i + freeSpan < total) {
+        const next = TIME_SLOTS[i + freeSpan];
+        if (!isCourtOpen(court, next) || getBlockAtSlot(court.id, next) || getBookingAtSlot(court.id, next)) {
+          break;
+        }
+        freeSpan++;
+      }
+      const maxMinutes = freeSpan * 30;
+
+      cells.push({ kind: 'free', maxMinutes });
       i++;
     }
     return cells;
@@ -400,6 +411,77 @@ export default function AdminSchedulePage() {
     setBlockError(null);
     setIsBlockModalOpen(true);
   }
+
+  // Calculate continuous available minutes for any court at a given start time
+  const getAvailableWindowForCourt = useCallback(
+    (courtId: string, startTime: string): { maxMinutes: number; nextEventReason?: string; nextEventTime?: string } => {
+      const court = courts.find((c) => c.id === courtId);
+      if (!court) return { maxMinutes: 60 };
+
+      const total = TIME_SLOTS.length;
+      const startIdx = TIME_SLOTS.indexOf(startTime);
+      if (startIdx === -1) return { maxMinutes: 60 };
+
+      let span = 0;
+      let nextEventReason: string | undefined;
+      let nextEventTime: string | undefined;
+
+      for (let k = startIdx; k < total; k++) {
+        const slot = TIME_SLOTS[k];
+        if (!isCourtOpen(court, slot)) {
+          nextEventReason = 'Closing time';
+          nextEventTime = slot;
+          break;
+        }
+        const block = getBlockAtSlot(courtId, slot);
+        if (block) {
+          nextEventReason = block.reason || 'Court Maintenance';
+          nextEventTime = slot;
+          break;
+        }
+        const booking = getBookingAtSlot(courtId, slot);
+        if (booking) {
+          nextEventReason = `Reserved by ${booking.leadBookerName || 'Player'}`;
+          nextEventTime = slot;
+          break;
+        }
+        span++;
+      }
+
+      return {
+        maxMinutes: span * 30,
+        nextEventReason,
+        nextEventTime,
+      };
+    },
+    [courts, isCourtOpen, getBlockAtSlot, getBookingAtSlot]
+  );
+
+  const currentWindow = useMemo(() => {
+    return getAvailableWindowForCourt(bookCourtId, bookStartTime);
+  }, [bookCourtId, bookStartTime, getAvailableWindowForCourt]);
+
+  // Find alternative courts with longer available windows at this same start time
+  const alternativeCourts = useMemo(() => {
+    if (!isBookingModalOpen) return [];
+    if (currentWindow.maxMinutes >= 90) return [];
+
+    return courts
+      .filter((c) => c.id !== bookCourtId)
+      .map((c) => ({
+        court: c,
+        window: getAvailableWindowForCourt(c.id, bookStartTime),
+      }))
+      .filter((alt) => alt.window.maxMinutes > currentWindow.maxMinutes);
+  }, [isBookingModalOpen, currentWindow.maxMinutes, courts, bookCourtId, bookStartTime, getAvailableWindowForCourt]);
+
+  // Auto-clamp bookDuration if current court's available window is smaller than selected duration
+  useEffect(() => {
+    if (isBookingModalOpen && currentWindow.maxMinutes > 0 && bookDuration > currentWindow.maxMinutes) {
+      const bestFit = [90, 60, 30].find((d) => d <= currentWindow.maxMinutes) || 30;
+      setBookDuration(bestFit);
+    }
+  }, [isBookingModalOpen, currentWindow.maxMinutes, bookDuration]);
 
   // Price calculations for booking modal
   const selectedCourt = courts.find((c) => c.id === bookCourtId);
@@ -990,6 +1072,8 @@ export default function AdminSchedulePage() {
                         const slotEnd = new Date(slotDate.getTime() + 30 * 60000);
                         const isConcluded = slotEnd.getTime() <= nowTick;
                         const isOngoing = slotDate.getTime() <= nowTick && !isConcluded;
+                        const maxMins = cell.kind === 'free' ? cell.maxMinutes : 60;
+                        const isCapped30 = maxMins === 30;
 
                         return (
                           <td key={court.id} className={styles.slotCell}>
@@ -1012,13 +1096,23 @@ export default function AdminSchedulePage() {
                               title={
                                 isConcluded
                                   ? 'Time has passed'
+                                  : isCapped30
+                                  ? `Only 30 mins available before next booking on ${court.name}`
                                   : isOngoing
                                   ? `Walk-in play on ${court.name} right now`
                                   : `Reserve ${court.name} at ${formatTimeString(slot)}`
                               }
                             >
                               <span className={styles.slotAvailableText}>
-                                {isConcluded ? '' : isOngoing ? '⚡ Walk-in' : '+ Reserve'}
+                                {isConcluded
+                                  ? ''
+                                  : isOngoing
+                                  ? isCapped30
+                                    ? '⚡ Walk-in (30m)'
+                                    : '⚡ Walk-in'
+                                  : isCapped30
+                                  ? '+ Reserve (30m)'
+                                  : '+ Reserve'}
                               </span>
                             </button>
                           </td>
@@ -1292,23 +1386,92 @@ export default function AdminSchedulePage() {
                   </div>
                 )}
 
-                {/* Duration Selector Pills (Flexible Blocks) */}
+                {/* Conflict Notice & Alternative Court Recommendations */}
+                {currentWindow.maxMinutes < 90 && (
+                  <div className={styles.conflictNoticeCard}>
+                    <div className={styles.conflictNoticeHeader}>
+                      <span style={{ fontSize: '18px' }}>⚠️</span>
+                      <div>
+                        <strong>
+                          {currentWindow.maxMinutes <= 30
+                            ? 'Limited time slot: Only 30 mins available'
+                            : `Only ${currentWindow.maxMinutes} mins available on ${selectedCourt?.name.split(' - ')[0] || 'this court'}`}
+                        </strong>
+                        <p>
+                          Next reserved session begins at {formatTimeString(currentWindow.nextEventTime || '')}
+                          {currentWindow.nextEventReason ? ` (${currentWindow.nextEventReason})` : ''}.
+                        </p>
+                      </div>
+                    </div>
+
+                    {alternativeCourts.length > 0 && (
+                      <div className={styles.conflictAltSection}>
+                        <span className={styles.conflictAltTitle}>
+                          💡 Need a full 60m or 90m session? Switch court:
+                        </span>
+                        <div className={styles.conflictAltPills}>
+                          {alternativeCourts.map(({ court: altCourt, window: altWin }: any) => (
+                            <button
+                              key={altCourt.id}
+                              type="button"
+                              className={styles.conflictAltBtn}
+                              onClick={() => {
+                                setBookCourtId(altCourt.id);
+                                if (altWin.maxMinutes >= 60) {
+                                  setBookDuration(60);
+                                }
+                              }}
+                            >
+                              <span>👉 Switch to {altCourt.name.split(' - ')[0]}</span>
+                              <span className={styles.conflictAltBadge}>{altWin.maxMinutes}m free</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Duration Selector Pills (Flexible Blocks with Conflict Prevention) */}
                 <div>
-                  <label style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-2)' }}>
-                    Session Duration (Flexible Blocks)
-                  </label>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
+                    <label style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', margin: 0 }}>
+                      Session Duration (Flexible Blocks)
+                    </label>
+                    {currentWindow.maxMinutes < 90 && (
+                      <span style={{ fontSize: '11px', color: '#b45309', fontWeight: 600 }}>
+                        Max {currentWindow.maxMinutes} mins available
+                      </span>
+                    )}
+                  </div>
                   <div className={styles.pillGroup}>
-                    {[30, 60, 90].map((dur) => (
-                      <button
-                        key={dur}
-                        type="button"
-                        id={`pill-duration-${dur}`}
-                        className={`${styles.pillBtn} ${bookDuration === dur ? styles.pillActive : ''}`}
-                        onClick={() => setBookDuration(dur)}
-                      >
-                        {dur} Min
-                      </button>
-                    ))}
+                    {[30, 60, 90].map((dur) => {
+                      const isAllowed = dur <= currentWindow.maxMinutes;
+                      const isSelected = bookDuration === dur;
+                      return (
+                        <button
+                          key={dur}
+                          type="button"
+                          id={`pill-duration-${dur}`}
+                          disabled={!isAllowed}
+                          className={`${styles.pillBtn} ${isSelected ? styles.pillActive : ''} ${
+                            !isAllowed ? styles.durationPillDisabled : ''
+                          }`}
+                          onClick={() => {
+                            if (!isAllowed) return;
+                            setBookDuration(dur);
+                          }}
+                          title={
+                            !isAllowed
+                              ? `Cannot select ${dur} mins: overlaps with ${currentWindow.nextEventTime} (${currentWindow.nextEventReason})`
+                              : ''
+                          }
+                        >
+                          <span>{dur} Min</span>
+                          {!isAllowed && <span className={styles.durationPillBadge}>Overlaps</span>}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
