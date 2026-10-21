@@ -252,162 +252,168 @@ export async function POST(request: Request) {
     }
 
     // 3. Perform atomic transaction: conflict check + stock deduction + booking creation
-    const booking = await prisma.$transaction(async (tx) => {
-      // Overlapping bookings check
-      const overlappingBooking = await tx.booking.findFirst({
-        where: {
-          courtId,
-          status: { in: ['PENDING', 'AWAITING_PAYMENT', 'CONFIRMED'] },
-          OR: [
-            {
-              startTime: { lt: end },
-              endTime: { gt: start },
+    const booking = await prisma.$transaction(
+      async (tx) => {
+        // Parallel overlapping checks
+        const [overlappingBooking, overlappingBlock] = await Promise.all([
+          tx.booking.findFirst({
+            where: {
+              courtId,
+              status: { in: ['PENDING', 'AWAITING_PAYMENT', 'CONFIRMED'] },
+              OR: [
+                {
+                  startTime: { lt: end },
+                  endTime: { gt: start },
+                },
+              ],
             },
-          ],
-        },
-      });
+          }),
+          tx.courtBlock.findFirst({
+            where: {
+              courtId,
+              blockedFrom: { lt: end },
+              blockedTo: { gt: start },
+            },
+          }),
+        ]);
 
-      if (overlappingBooking) {
-        const conflictStart = new Date(overlappingBooking.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        const conflictEnd = new Date(overlappingBooking.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        throw new Error(`This court slot conflicts with an existing reservation (${conflictStart} - ${conflictEnd}). Please select a shorter duration or another court.`);
-      }
-
-      // Overlapping blocks check
-      const overlappingBlock = await tx.courtBlock.findFirst({
-        where: {
-          courtId,
-          blockedFrom: { lt: end },
-          blockedTo: { gt: start },
-        },
-      });
-
-      if (overlappingBlock) {
-        const blockReason = overlappingBlock.reason || 'Maintenance';
-        const blockStart = new Date(overlappingBlock.blockedFrom).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        const blockEnd = new Date(overlappingBlock.blockedTo).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        throw new Error(`This court is blocked (${blockStart} - ${blockEnd}): ${blockReason}. Please pick another time or court.`);
-      }
-
-      // Calculate court rental cost
-      const hourlyRateNumber = Number(court.hourlyRate);
-      const courtCost = (hourlyRateNumber * duration) / 60;
-
-      // Calculate add-ons cost and validate inventory
-      let addonsCost = 0;
-      const validAddons: { productId: string; quantity: number; unitPrice: number }[] = [];
-
-      for (const item of addons) {
-        if (!item.productId || !item.quantity || item.quantity <= 0) continue;
-
-        const product = await tx.product.findUnique({
-          where: { id: item.productId },
-        });
-
-        if (!product) {
-          throw new Error(`Product not found: ${item.productId}`);
+        if (overlappingBooking) {
+          const conflictStart = new Date(overlappingBooking.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          const conflictEnd = new Date(overlappingBooking.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          throw new Error(`This court slot conflicts with an existing reservation (${conflictStart} - ${conflictEnd}). Please select a shorter duration or another court.`);
         }
 
-        if (product.stockQty < item.quantity) {
-          throw new Error(
-            `Insufficient stock for ${product.name}. Requested: ${item.quantity}, Available: ${product.stockQty}`
-          );
+        if (overlappingBlock) {
+          const blockReason = overlappingBlock.reason || 'Maintenance';
+          const blockStart = new Date(overlappingBlock.blockedFrom).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          const blockEnd = new Date(overlappingBlock.blockedTo).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          throw new Error(`This court is blocked (${blockStart} - ${blockEnd}): ${blockReason}. Please pick another time or court.`);
         }
 
-        const unitPriceNum = Number(product.price);
-        const itemTotal = unitPriceNum * item.quantity;
-        addonsCost += itemTotal;
+        // Calculate court rental cost
+        const hourlyRateNumber = Number(court.hourlyRate);
+        const courtCost = (hourlyRateNumber * duration) / 60;
 
-        validAddons.push({
-          productId: product.id,
-          quantity: item.quantity,
-          unitPrice: unitPriceNum,
-        });
+        // Calculate add-ons cost and validate inventory
+        let addonsCost = 0;
+        const validAddons: { productId: string; quantity: number; unitPrice: number }[] = [];
 
-        // Decrement product inventory
-        await tx.product.update({
-          where: { id: product.id },
-          data: { stockQty: product.stockQty - item.quantity },
-        });
-      }
+        const validAddonItems = addons.filter((item: any) => item.productId && item.quantity && item.quantity > 0);
+        if (validAddonItems.length > 0) {
+          const productIds = validAddonItems.map((item: any) => item.productId);
+          const products = await tx.product.findMany({
+            where: { id: { in: productIds } },
+          });
+          const productMap = new Map(products.map((p) => [p.id, p]));
 
-      const totalCalculatedAmount = courtCost + addonsCost;
+          for (const item of validAddonItems) {
+            const product = productMap.get(item.productId);
+            if (!product) {
+              throw new Error(`Product not found: ${item.productId}`);
+            }
 
-      const isConfirmed = initialStatus === 'CONFIRMED';
-      const formattedNotes = [
-        isWalkIn ? '🚶 Walk-in Customer' : '',
-        paymentMethod ? `Paid via ${paymentMethod}${paymentReference ? ` (${paymentReference})` : ''}` : '',
-        notes || '',
-      ].filter(Boolean).join(' | ');
+            if (product.stockQty < item.quantity) {
+              throw new Error(
+                `Insufficient stock for ${product.name}. Requested: ${item.quantity}, Available: ${product.stockQty}`
+              );
+            }
 
-      // Create Booking
-      const createdBooking = await tx.booking.create({
-        data: {
-          courtId,
-          leadBookerId: resolvedBookerId,
-          startTime: start,
-          endTime: end,
-          durationMinutes: duration,
-          status: isConfirmed ? 'CONFIRMED' : 'AWAITING_PAYMENT',
-          paymentConfirmedAt: isConfirmed ? new Date() : null,
-          paymentConfirmedBy: isConfirmed ? (staffId || null) : null,
-          totalAmount: totalCalculatedAmount,
-          isWalkIn: Boolean(isWalkIn),
-          walkInGuestName: walkInCustomer?.fullName || null,
-          walkInGuestPhone: walkInCustomer?.phone || null,
-          walkInGuestEmail: walkInCustomer?.email || null,
-          notes: formattedNotes || null,
-        },
-      });
+            const unitPriceNum = Number(product.price);
+            const itemTotal = unitPriceNum * item.quantity;
+            addonsCost += itemTotal;
 
-      // Insert Transaction record if paid at counter
-      if (isConfirmed && (paymentMethod === 'CASH' || paymentMethod === 'EWALLET')) {
-        await tx.transaction.create({
+            validAddons.push({
+              productId: product.id,
+              quantity: item.quantity,
+              unitPrice: unitPriceNum,
+            });
+
+            // Decrement product inventory
+            await tx.product.update({
+              where: { id: product.id },
+              data: { stockQty: { decrement: item.quantity } },
+            });
+          }
+        }
+
+        const totalCalculatedAmount = courtCost + addonsCost;
+
+        const isConfirmed = initialStatus === 'CONFIRMED';
+        const formattedNotes = [
+          isWalkIn ? '🚶 Walk-in Customer' : '',
+          paymentMethod ? `Paid via ${paymentMethod}${paymentReference ? ` (${paymentReference})` : ''}` : '',
+          notes || '',
+        ].filter(Boolean).join(' | ');
+
+        // Insert Participant Shares if split requested
+        const splitPlayers = Math.max(1, parseInt(participantCount, 10) || 1);
+        const shareAmount = parseFloat((totalCalculatedAmount / splitPlayers).toFixed(2));
+
+        // Atomic nested creation: Booking + Add-ons + Participant share + Transaction
+        return await tx.booking.create({
           data: {
-            bookingId: createdBooking.id,
-            amount: totalCalculatedAmount,
-            paymentMethod: paymentMethod === 'CASH' ? 'CASH' : 'EWALLET',
-            paymentReference: paymentReference || (paymentMethod === 'CASH' ? 'Walk-in Cash Counter' : 'Walk-in E-Wallet Counter'),
+            courtId,
+            leadBookerId: resolvedBookerId,
+            startTime: start,
+            endTime: end,
+            durationMinutes: duration,
+            status: isConfirmed ? 'CONFIRMED' : 'AWAITING_PAYMENT',
+            paymentConfirmedAt: isConfirmed ? new Date() : null,
+            paymentConfirmedBy: isConfirmed ? (staffId || null) : null,
+            totalAmount: totalCalculatedAmount,
+            isWalkIn: Boolean(isWalkIn),
+            walkInGuestName: walkInCustomer?.fullName || null,
+            walkInGuestPhone: walkInCustomer?.phone || null,
+            walkInGuestEmail: walkInCustomer?.email || null,
+            notes: formattedNotes || null,
+            addons: validAddons.length > 0
+              ? {
+                  create: validAddons.map((addon) => ({
+                    productId: addon.productId,
+                    quantity: addon.quantity,
+                    unitPrice: addon.unitPrice,
+                  })),
+                }
+              : undefined,
+            participants: {
+              create: [
+                {
+                  userId: resolvedBookerId,
+                  shareAmount,
+                  paymentStatus: isConfirmed ? 'PAID' : 'PENDING',
+                },
+              ],
+            },
+            transactions:
+              isConfirmed && (paymentMethod === 'CASH' || paymentMethod === 'EWALLET')
+                ? {
+                    create: [
+                      {
+                        amount: totalCalculatedAmount,
+                        paymentMethod: paymentMethod === 'CASH' ? 'CASH' : 'EWALLET',
+                        paymentReference:
+                          paymentReference ||
+                          (paymentMethod === 'CASH'
+                            ? 'Walk-in Cash Counter'
+                            : 'Walk-in E-Wallet Counter'),
+                      },
+                    ],
+                  }
+                : undefined,
+          },
+          include: {
+            court: { select: { name: true, surfaceType: true } },
+            leadBooker: { select: { fullName: true, email: true } },
+            addons: { include: { product: true } },
+            participants: true,
           },
         });
+      },
+      {
+        maxWait: 10000, // 10s wait for connection from pool
+        timeout: 20000, // 20s allowance for transaction operations
       }
-
-      // Insert Booking Add-ons
-      for (const addon of validAddons) {
-        await tx.bookingAddon.create({
-          data: {
-            bookingId: createdBooking.id,
-            productId: addon.productId,
-            quantity: addon.quantity,
-            unitPrice: addon.unitPrice,
-          },
-        });
-      }
-
-      // Insert Participant Shares if split requested
-      const splitPlayers = Math.max(1, parseInt(participantCount, 10) || 1);
-      const shareAmount = parseFloat((totalCalculatedAmount / splitPlayers).toFixed(2));
-
-      // Always create at least the lead booker participant share
-      await tx.bookingParticipant.create({
-        data: {
-          bookingId: createdBooking.id,
-          userId: resolvedBookerId,
-          shareAmount,
-          paymentStatus: isConfirmed ? 'PAID' : 'PENDING',
-        },
-      });
-
-      return tx.booking.findUnique({
-        where: { id: createdBooking.id },
-        include: {
-          court: { select: { name: true, surfaceType: true } },
-          leadBooker: { select: { fullName: true, email: true } },
-          addons: { include: { product: true } },
-          participants: true,
-        },
-      });
-    });
+    );
 
     if (booking?.leadBookerId) {
       await prisma.notificationLog.create({

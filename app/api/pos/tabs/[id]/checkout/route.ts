@@ -131,6 +131,9 @@ export async function POST(request: Request, { params }: RouteContext) {
         changeDue,
         notificationLogId,
       };
+    }, {
+      maxWait: 10000,
+      timeout: 15000,
     });
 
     const receipt = {
